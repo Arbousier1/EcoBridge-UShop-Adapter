@@ -1,59 +1,24 @@
-name: Java CI with Maven (Paper 1.21.1)
-
-on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        lfs: true # 确保拉取真实文件内容
-
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
-        cache: maven
-
-    # 第一步：自动探测并安装本地依赖
+# 核心修正：添加 -DgeneratePom=true 以跳过父项目解析错误
     - name: Install Local Dependencies
       run: |
-        # 1. 自动定位 UltimateShop 4.2.3
-        ULTIMATE_JAR=$(find libs -name "UltimateShop-4.2.3.jar" | head -n 1)
-        echo "Found UltimateShop at: $ULTIMATE_JAR"
+        # 1. 安装 UltimateShop (强制生成新 POM)
+        ULTIMATE_PATH=$(find libs -name "UltimateShop-4.2.3.jar" | head -n 1)
+        echo "Found UltimateShop at: $ULTIMATE_PATH"
         mvn install:install-file \
-          -Dfile="$ULTIMATE_JAR" \
+          -Dfile="$ULTIMATE_PATH" \
           -DgroupId=cn.superiormc \
           -DartifactId=UltimateShop \
           -Dversion=4.2.3 \
-          -Dpackaging=jar
+          -Dpackaging=jar \
+          -DgeneratePom=true
 
-        # 2. 自动定位 EcoBridge 1.0 (版本号必须与 pom.xml 对应)
-        ECO_JAR=$(find libs -name "EcoBridge-1.0.jar" | head -n 1)
+        # 2. 安装 EcoBridge (强制生成新 POM)
+        ECO_PATH=$(find libs -name "EcoBridge-1.0.jar" | head -n 1)
         echo "Found EcoBridge at: $ECO_JAR"
         mvn install:install-file \
-          -Dfile="$ECO_JAR" \
+          -Dfile="$ECO_PATH" \
           -DgroupId=top.ellan.ecobridge \
           -DartifactId=EcoBridge \
           -Dversion=1.0 \
-          -Dpackaging=jar
-
-    # 第二步：强制刷新并编译
-    - name: Build with Maven
-      run: mvn clean package -U --file pom.xml
-
-    # 第三步：上传产物
-    - name: Upload Protected Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: EcoBridgeMiddleware-Release
-        path: target/*-protected.jar
-        if-no-files-found: error
+          -Dpackaging=jar \
+          -DgeneratePom=true
