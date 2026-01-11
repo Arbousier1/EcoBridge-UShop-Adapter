@@ -1,18 +1,36 @@
 name: EcoBridgeMiddleware
 version: 1.0.0
 main: top.ellan.middleware.EcoBridgeMiddleware
-api-version: '1.20'
+# 适配 Paper 1.21.1 现代化 API
+api-version: '1.21'
 author: Ellan
-description: Middleware connecting EcoBridge and UltimateShop to provide dynamic pricing.
+description: "基于 Rust 核心演算的 UltimateShop 动态经济中间件"
+# 控制台日志前缀
+prefix: EcoBridge-Mid
 
 # 必须依赖项：如果缺失其中任何一个，本插件将不会加载
 # UltimateShop: 提供商店框架和交易事件
-# EcoBridge: 提供 Rust 核心计算能力
-# Vault: 提供基础经济服务支持
+# EcoBridge: 提供 Rust 核心计算能力 (JNI)
+# Vault: 提供基础经济服务对接
 depend: 
   - UltimateShop
   - EcoBridge
   - Vault
 
 # 插件加载优先级提示
+# POSTWORLD 确保在所有基础插件和世界配置完全就绪后再执行索引构建逻辑
 load: POSTWORLD
+
+# 指令注册
+commands:
+  ebm:
+    description: "EcoBridgeMiddleware 主指令"
+    permission: ecobridge.admin
+    usage: "/ebm reload"
+    aliases: [ebmid, ecobridgemid]
+
+# 权限节点定义
+permissions:
+  ecobridge.admin:
+    description: "允许管理 EcoBridge 经济中间件 (如重载配置和索引)"
+    default: op

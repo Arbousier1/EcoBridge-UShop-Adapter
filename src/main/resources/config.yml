@@ -3,8 +3,15 @@
 # 环境: Paper 1.21.1 | 格式: MiniMessage
 # ==========================================
 
-# 是否开启控制台调试日志 (显示价格修改细节)
-debug: true
+# 基础设置
+settings:
+  # 是否开启控制台调试日志 (显示价格修改细节)
+  debug: true
+  # 货币显示名称
+  currency-name: "<yellow>岚金"
+  # 动态价格缓存有效时长 (秒)
+  # 建议设置为 30-60 秒，防止演算压力过大
+  cache-ttl: 30
 
 # 经济设置
 economy:
@@ -13,13 +20,19 @@ economy:
   # 当 Rust 核心演算失败或 JSON 异常时的兜底策略
   fallback-to-original: true
 
+# 界面显示设置 (注入到 UltimateShop 的物品 Lore 中)
+display:
+  # 价格行模板 (使用 <price> 作为价格占位符，<currency> 作为货币占位符)
+  price-lore: 
+    - ""
+    - "<gray>实时动态价格: <gold><price> <currency>"
+    - "<dark_gray>⚡ 由 EcoBridge 实时推演"
+
 # 消息提醒设置 (支持 MiniMessage 标签)
 messages:
   # 插件前缀
   prefix: "<dark_gray>[<gradient:#00fbff:#0072ff>EcoBridge-Mid</gradient>] "
-  
-  # 价格变动提示 (已修改为 岚金)
-  price-changed: "<gray>商品动态价格已调整为: <yellow><price> <gold>岚金"
-  
+  # 价格变动提示
+  price-changed: "<gray>商品动态价格已调整为: <gold><price> <currency>"
   # 错误提示
   calculation-error: "<red>价格演算核心异常，已回退至原价。"
