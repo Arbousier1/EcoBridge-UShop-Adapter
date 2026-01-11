@@ -13,6 +13,9 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        # 必须开启，否则拉取到的是 LFS 指针而非真实 JAR
+        lfs: true
 
     - name: Set up JDK 21
       uses: actions/setup-java@v4
@@ -21,10 +24,18 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    # 第一步：精准安装本地依赖
+    # 新增：检查 JAR 文件是否为真实内容而非 LFS 指针
+    - name: Check File Size
+      run: |
+        ls -lh libs/
+        FILE_SIZE=$(stat -c%s "libs/EcoBridge-1.0.jar")
+        if [ $FILE_SIZE -lt 2048 ]; then
+          echo "警告: EcoBridge-1.0.jar 体积过小 ($FILE_SIZE bytes)，可能是 LFS 指针文件！"
+          exit 1
+        fi
+
     - name: Install Local Dependencies
       run: |
-        # 自动搜索并安装 UltimateShop (坐标: cn.superiormc:UltimateShop:4.2.3)
         ULTIMATE_PATH=$(find libs -name "UltimateShop-4.2.3.jar" | head -n 1)
         mvn install:install-file \
           -Dfile="$ULTIMATE_PATH" \
@@ -33,8 +44,6 @@ jobs:
           -Dversion=4.2.3 \
           -Dpackaging=jar
 
-        # 自动搜索并安装 EcoBridge (坐标: top.ellan.ecobridge:EcoBridge:1.0)
-        # 必须确保 version 参数为 1.0 以匹配 pom.xml
         ECO_PATH=$(find libs -name "EcoBridge-1.0.jar" | head -n 1)
         mvn install:install-file \
           -Dfile="$ECO_PATH" \
@@ -43,15 +52,13 @@ jobs:
           -Dversion=1.0 \
           -Dpackaging=jar
 
-    # 第二步：执行构建（加入 -U 强制刷新依赖索引）
     - name: Build with Maven
+      # 使用 -U 强制刷新本地依赖视图
       run: mvn clean package -U --file pom.xml
 
-    # 第三步：上传构建产物
     - name: Upload Protected Artifact
       uses: actions/upload-artifact@v4
       with:
         name: EcoBridgeMiddleware-Release
-        # 匹配 ProGuard 生成的混淆保护包
         path: target/*-protected.jar
         if-no-files-found: error
