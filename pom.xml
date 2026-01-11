@@ -7,11 +7,13 @@
     <groupId>top.ellan.middleware</groupId>
     <artifactId>EcoBridgeMiddleware</artifactId>
     <version>1.0.0</version>
+    <packaging>jar</packaging>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
     </properties>
 
     <repositories>
@@ -29,36 +31,41 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>1.21.11-R0.1-SNAPSHOT</version>
+            <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>com.github.MilkBowl</groupId>
             <artifactId>VaultAPI</artifactId>
-            <version>1.7</version>
+            <version>1.7.1</version>
             <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>cn.superiormc</groupId>
             <artifactId>UltimateShop</artifactId>
             <version>4.2.3</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/UltimateShop-4.2.3.jar</systemPath>
+            <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>top.ellan.ecobridge</groupId>
             <artifactId>EcoBridge</artifactId>
-            <version>1.0</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/EcoBridge-1.0.jar</systemPath>
+            <version>1.0.0</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -69,9 +76,56 @@
                         <goals>
                             <goal>shade</goal>
                         </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <minimizeJar>true</minimizeJar> </configuration>
                     </execution>
                 </executions>
             </plugin>
+
+            <plugin>
+                <groupId>com.github.wvengen</groupId>
+                <artifactId>proguard-maven-plugin</artifactId>
+                <version>2.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>proguard</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <proguardVersion>7.3.2</proguardVersion>
+                    <injar>${project.build.finalName}.jar</injar>
+                    <outjar>${project.build.finalName}-protected.jar</outjar>
+                    <obfuscate>true</obfuscate>
+                    <options>
+                        <option>-dontshrink</option> <option>-dontoptimize</option>
+                        <option>-keepattributes Exceptions,InnerClasses,Signature,Deprecated,SourceFile,LineNumberTable,*Annotation*,EnclosingMethod</option>
+                        
+                        <option>-keep public class top.ellan.middleware.EcoBridgeMiddleware { *; }</option>
+                        
+                        <option>-keepclassmembers class * { @org.bukkit.event.EventHandler *; }</option>
+                        <option>-keep public class top.ellan.middleware.hook.UShopEconomyHook { *; }</option>
+                        
+                        <option>-keepclassmembers class top.ellan.middleware.listener.ShopInterceptor { 
+                            public static *** getShopItemByStack(...);
+                            public static int getItemSignature(...);
+                            public static double safeCalculatePrice(...);
+                        }</option>
+
+                        <option>-dontwarn **</option>
+                    </options>
+                    <libs>
+                        <lib>${java.home}/jmods/</lib> </libs>
+                </configuration>
+            </plugin>
         </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering> </resource>
+        </resources>
     </build>
 </project>
