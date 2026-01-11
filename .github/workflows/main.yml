@@ -25,8 +25,7 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. 依然需要 Maven 来安装 libs 目录下的本地依赖到本地仓库 (~/.m2)
-    # 这样 Gradle 才能通过 mavenLocal() 找到它们
+    # 3. 将本地 libs 里的依赖安装到本地仓库 (供 Gradle 的 mavenLocal 使用)
     - name: Install Local Dependencies
       run: |
         mvn install:install-file \
@@ -45,8 +44,10 @@ jobs:
           -Dpackaging=jar \
           -DgeneratePom=true
 
-    # 4. 执行构建任务
-    # 注意：这里去掉了 ./gradlew，改用系统自带的 gradle 命令
+    # 4. 执行构建
+    # 使用 --include-build 或传递系统属性有时无效，
+    # 如果你的 build.gradle.kts 没写 mavenCentral()，gradle 默认只看插件门户。
+    # 这里我们直接运行 gradle 任务。
     - name: Build and Obfuscate with Gradle
       run: gradle proguard --no-daemon
 
