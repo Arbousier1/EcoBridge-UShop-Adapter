@@ -25,7 +25,7 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. 将本地 libs 里的依赖安装到本地仓库 (供 Gradle 的 mavenLocal 使用)
+    # 3. 安装本地依赖到本地 Maven 仓库
     - name: Install Local Dependencies
       run: |
         mvn install:install-file \
@@ -44,17 +44,28 @@ jobs:
           -Dpackaging=jar \
           -DgeneratePom=true
 
-    # 4. 执行构建
-    # 使用 --include-build 或传递系统属性有时无效，
-    # 如果你的 build.gradle.kts 没写 mavenCentral()，gradle 默认只看插件门户。
-    # 这里我们直接运行 gradle 任务。
-    - name: Build and Obfuscate with Gradle
-      run: gradle proguard --no-daemon
+    # 4. 关键：动态创建 init.gradle 以强制添加插件仓库
+    # 这可以在不修改项目源码的情况下，告诉 Gradle 去哪里找 ProGuard 插件
+    - name: Setup Gradle Init Script
+      run: |
+        echo "settingsEvaluated { settings ->
+          settings.pluginManagement {
+            repositories {
+              gradlePluginPortal()
+              mavenCentral()
+            }
+          }
+        }" > init.gradle
 
-    # 5. 上传构建产物
+    # 5. 执行构建，通过 --init-script 加载刚才创建的配置
+    - name: Build and Obfuscate with Gradle
+      run: gradle proguard --init-script init.gradle --no-daemon
+
+    # 6. 上传产物
     - name: Upload Protected Artifact
       uses: actions/upload-artifact@v4
       with:
         name: EcoBridgeMiddleware-Release
         path: build/libs/*-protected.jar
         if-no-files-found: error
+
