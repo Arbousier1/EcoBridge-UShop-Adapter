@@ -1,0 +1,11 @@
+<plugin>
+    <groupId>com.github.wvengen</groupId>
+    <artifactId>proguard-maven-plugin</artifactId>
+    <version>2.6.0</version>
+    <configuration>
+        <proguardInclude>${basedir}/src/main/resources/proguard.pro</proguardInclude>
+        <libs>
+            <lib>${java.home}/jmods/</lib>
+        </libs>
+    </configuration>
+</plugin>

@@ -49,7 +49,7 @@
         <dependency>
             <groupId>top.ellan.ecobridge</groupId>
             <artifactId>EcoBridge</artifactId>
-            <version>1.0.0</version>
+            <version>1.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
@@ -78,7 +78,8 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <minimizeJar>true</minimizeJar> </configuration>
+                            <minimizeJar>true</minimizeJar>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -101,31 +102,41 @@
                     <outjar>${project.build.finalName}-protected.jar</outjar>
                     <obfuscate>true</obfuscate>
                     <options>
-                        <option>-dontshrink</option> <option>-dontoptimize</option>
+                        <option>-dontshrink</option>
+                        <option>-dontoptimize</option>
                         <option>-keepattributes Exceptions,InnerClasses,Signature,Deprecated,SourceFile,LineNumberTable,*Annotation*,EnclosingMethod</option>
                         
                         <option>-keep public class top.ellan.middleware.EcoBridgeMiddleware { *; }</option>
                         
                         <option>-keepclassmembers class * { @org.bukkit.event.EventHandler *; }</option>
+                        
                         <option>-keep public class top.ellan.middleware.hook.UShopEconomyHook { *; }</option>
                         
                         <option>-keepclassmembers class top.ellan.middleware.listener.ShopInterceptor { 
-                            public static *** getShopItemByStack(...);
+                            public static void init(...);
+                            public static void buildIndex();
+                            public static void clearAllCaches();
                             public static int getItemSignature(...);
                             public static double safeCalculatePrice(...);
+                            public static java.lang.Double getAndRemoveCache(...);
+                            public static *** getShopItemByStack(...);
                         }</option>
+
+                        <option>-keepclassmembers record * { *; }</option>
 
                         <option>-dontwarn **</option>
                     </options>
                     <libs>
-                        <lib>${java.home}/jmods/</lib> </libs>
+                        <lib>${java.home}/jmods/</lib>
+                    </libs>
                 </configuration>
             </plugin>
         </plugins>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-                <filtering>true</filtering> </resource>
+                <filtering>true</filtering>
+            </resource>
         </resources>
     </build>
 </project>
