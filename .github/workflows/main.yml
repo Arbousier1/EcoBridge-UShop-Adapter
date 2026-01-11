@@ -8,7 +8,6 @@ on:
 
 jobs:
   build:
-    # 运行在 Linux 环境，对文件名大小写极其敏感
     runs-on: ubuntu-latest
 
     steps:
@@ -22,26 +21,23 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    # 调试步骤：列出 libs 目录结构，确保文件已成功提交至 GitHub
+    # 1. 调试检查：确保 libs 目录和 JAR 文件已正确上传至 GitHub
     - name: Debug - List libs directory
       run: |
-        echo "检查当前工作目录..."
-        ls -R
         if [ -d "libs" ]; then
           echo "找到 libs 文件夹，内容如下:"
           ls -R libs/
         else
-          echo "错误：找不到 libs 文件夹！请确认已执行 git add -f libs/*.jar"
+          echo "错误：找不到 libs 文件夹！请检查 Git 提交。"
           exit 1
         fi
 
-    # 核心修正：自动定位并安装本地依赖
-    # 无论你的 JAR 包在 libs 根目录还是嵌套文件夹内，此脚本都能找到它
+    # 2. 安装本地依赖：自动定位路径以适配嵌套结构
     - name: Install Local Dependencies
       run: |
         ULTIMATE_PATH=$(find libs -name "UltimateShop-4.2.3.jar" | head -n 1)
         ECO_PATH=$(find libs -name "EcoBridge-1.0.jar" | head -n 1)
-
+        
         echo "定位到 UltimateShop: $ULTIMATE_PATH"
         echo "定位到 EcoBridge: $ECO_PATH"
 
@@ -50,5 +46,22 @@ jobs:
           exit 1
         fi
 
-        # 安装到 Runner 的本地 Maven 仓库
-        mvn install:install-file -Dfile="$ULTIMATE_PATH" -DgroupId=
+        mvn install:install-file -Dfile="$ULTIMATE_PATH" -DgroupId=cn.superiormc -DartifactId=UltimateShop -Dversion=4.2.3 -Dpackaging=jar
+        mvn install:install-file -Dfile="$ECO_PATH" -DgroupId=top.ellan.ecobridge -DartifactId=EcoBridge -Dversion=1.0 -Dpackaging=jar
+
+    # 3. 执行 Maven 构建：触发编译、Shade 打包及 ProGuard 混淆
+    - name: Build with Maven
+      run: mvn clean package --file pom.xml
+
+    # 4. 调试：查看 target 目录生成的最终文件名
+    - name: Debug - List Target Output
+      run: ls -l target/
+
+    # 5. 上传构建产物：仅提取 ProGuard 保护后的版本
+    - name: Upload Protected Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: EcoBridgeMiddleware-Release
+        # 注意：此处的路径必须匹配 pom.xml 中 ProGuard 插件的 <outjar> 定义
+        path: target/*-protected.jar
+        if-no-files-found: error
