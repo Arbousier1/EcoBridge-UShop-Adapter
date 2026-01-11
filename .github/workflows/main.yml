@@ -24,7 +24,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         java-version: '21'
-        distribution: 'temurin'
+        distribution: 'temurin' 
         cache: maven
 
     # 3. 精准安装本地依赖库
