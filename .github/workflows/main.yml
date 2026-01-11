@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取代码并强制开启 LFS (防止本地 libs 下的 JAR 变成 1KB 指针)
+    # 1. 拉取代码并开启 LFS
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
@@ -25,9 +25,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. 将本地 libs 里的 JAR 安装到本地 Maven 仓库
-    # 这一步是必须的，因为 Gradle 在构建时需要通过坐标定位这些非公开依赖
-    - name: Install Local Dependencies to Maven Repo
+    # 3. 依然需要 Maven 来安装 libs 目录下的本地依赖到本地仓库 (~/.m2)
+    # 这样 Gradle 才能通过 mavenLocal() 找到它们
+    - name: Install Local Dependencies
       run: |
         mvn install:install-file \
           -Dfile=$(find libs -name "UltimateShop-*.jar") \
@@ -45,11 +45,10 @@ jobs:
           -Dpackaging=jar \
           -DgeneratePom=true
 
-    # 4. 授予执行权限并运行构建
+    # 4. 执行构建任务
+    # 注意：这里去掉了 ./gradlew，改用系统自带的 gradle 命令
     - name: Build and Obfuscate with Gradle
-      run: |
-        chmod +x gradlew
-        ./gradlew proguard --no-daemon
+      run: gradle proguard --no-daemon
 
     # 5. 上传构建产物
     - name: Upload Protected Artifact
