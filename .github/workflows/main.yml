@@ -1,6 +1,5 @@
 name: Java CI with Gradle (Paper 1.21.1)
 
-# 定义触发条件：当 main 或 master 分支有变动时触发
 on:
   push:
     branches: [ "main", "master" ]
@@ -12,37 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取代码并强制开启 LFS
-    # 必须开启 lfs: true，否则 libs 文件夹下的依赖 JAR 包只是 1KB 的文本指针，会导致编译报错
+    # 1. 拉取代码并开启 LFS
+    # 仍然需要 lfs: true，因为你的 libs/ 里的 JAR 包需要被完整拉取
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
         lfs: true
 
-    # 2. 配置 Java 21 环境 (Temurin 发行版)
+    # 2. 配置 Java 21 环境
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
-        cache: gradle # 开启 Gradle 依赖缓存，显著提升后续构建速度
+        cache: gradle
 
-    # 3. 授予 Gradle Wrapper 执行权限
-    # 确保 Ubuntu 环境下 gradlew 脚本可以被正常调用
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-
-    # 4. 执行构建与混淆任务
-    # 运行 proguard 任务。根据 build.gradle.kts 配置，该任务会自动触发编译、打包和最小化 (Shadow)
+    # 3. 直接使用系统预装的 gradle 执行任务
+    # 删除了 chmod +x gradlew 步骤，改用直接调用 gradle
     - name: Build and Obfuscate with Gradle
-      run: ./gradlew proguard --no-daemon
+      run: gradle proguard --no-daemon
 
-    # 5. 上传混淆后的保护包 (Artifacts)
-    # 仅上传经过 ProGuard 混淆保护且带有 -protected 后缀的 JAR 文件
+    # 4. 上传混淆后的保护包
     - name: Upload Protected Artifact
       uses: actions/upload-artifact@v4
       with:
         name: EcoBridgeMiddleware-Release
-        # Gradle 默认构建产物位于 build/libs/ 目录下
         path: build/libs/*-protected.jar
         if-no-files-found: error
