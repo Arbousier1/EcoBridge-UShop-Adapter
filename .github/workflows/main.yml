@@ -11,14 +11,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取代码并开启 LFS
-    # 仍然需要 lfs: true，因为你的 libs/ 里的 JAR 包需要被完整拉取
+    # 1. 拉取代码并强制开启 LFS (防止本地 libs 下的 JAR 变成 1KB 指针)
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
         lfs: true
 
-    # 2. 配置 Java 21 环境
+    # 2. 配置 JDK 21
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
@@ -26,12 +25,33 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. 直接使用系统预装的 gradle 执行任务
-    # 删除了 chmod +x gradlew 步骤，改用直接调用 gradle
-    - name: Build and Obfuscate with Gradle
-      run: gradle proguard --no-daemon
+    # 3. 将本地 libs 里的 JAR 安装到本地 Maven 仓库
+    # 这一步是必须的，因为 Gradle 在构建时需要通过坐标定位这些非公开依赖
+    - name: Install Local Dependencies to Maven Repo
+      run: |
+        mvn install:install-file \
+          -Dfile=$(find libs -name "UltimateShop-*.jar") \
+          -DgroupId=cn.superiormc \
+          -DartifactId=UltimateShop \
+          -Dversion=4.2.3 \
+          -Dpackaging=jar \
+          -DgeneratePom=true
 
-    # 4. 上传混淆后的保护包
+        mvn install:install-file \
+          -Dfile=$(find libs -name "EcoBridge-*.jar") \
+          -DgroupId=top.ellan.ecobridge \
+          -DartifactId=EcoBridge \
+          -Dversion=1.0 \
+          -Dpackaging=jar \
+          -DgeneratePom=true
+
+    # 4. 授予执行权限并运行构建
+    - name: Build and Obfuscate with Gradle
+      run: |
+        chmod +x gradlew
+        ./gradlew proguard --no-daemon
+
+    # 5. 上传构建产物
     - name: Upload Protected Artifact
       uses: actions/upload-artifact@v4
       with:
