@@ -10,6 +10,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
+import top.ellan.middleware.EcoBridgeMiddleware;
 import top.ellan.ecobridge.bridge.DataPacket;
 import top.ellan.ecobridge.bridge.RustCore;
 import top.ellan.ecobridge.provider.UShopProvider;
@@ -21,11 +22,11 @@ import java.util.HashMap;
 
 public class ShopInterceptor implements Listener {
 
-    // 交易级缓存：存活 60 秒，确保点击到扣款之间的时间差内价格有效
+    private static EcoBridgeMiddleware plugin;
+    public static void init(EcoBridgeMiddleware instance) { plugin = instance; }
+
     private static final ConcurrentHashMap<UUID, PriceCacheEntry> priceCache = new ConcurrentHashMap<>();
     private static final long CACHE_EXPIRY_MS = 60000; 
-    
-    // 快速索引：特征码 -> 物品对象
     private static final Map<Integer, ObjectItem> fastLookupMap = new HashMap<>();
 
     public static void buildIndex() {
@@ -40,21 +41,14 @@ public class ShopInterceptor implements Listener {
         }
     }
 
-    /**
-     * 安全的 JNI 调用包装
-     */
     public static double safeCalculatePrice(String json) {
         try {
             double price = RustCore.calculatePrice(json);
             return (price <= -1.0) ? -1.0 : price;
         } catch (Exception e) {
-            Bukkit.getLogger().severe("[EcoBridge-Mid] Rust 核心演算崩溃: " + e.getMessage());
+            Bukkit.getLogger().severe("[EcoBridge-Mid] Rust 演算核心异常: " + e.getMessage());
             return -1.0;
         }
-    }
-
-    public static ObjectItem getShopItemByStack(ItemStack stack) {
-        return stack == null ? null : fastLookupMap.get(getItemSignature(stack));
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -65,23 +59,41 @@ public class ShopInterceptor implements Listener {
 
         ObjectItem shopItem = getShopItemByStack(clicked);
         if (shopItem != null) {
-            DataPacket packet = UShopProvider.getFullDataPacket(player, shopItem, 1);
-            double dynamicPrice = safeCalculatePrice(packet.toJson());
+            String clickAction = ConfigManager.configManager.getClickAction(event.getClick(), shopItem);
             
-            if (dynamicPrice > 0) {
-                priceCache.put(player.getUniqueId(), new PriceCacheEntry(dynamicPrice));
+            DataPacket packet = UShopProvider.getFullDataPacket(player, shopItem, 1);
+            double basePrice = safeCalculatePrice(packet.toJson());
+            
+            if (basePrice > 0) {
+                // 读取倍率：购买 1.25x / 出售 1.0x
+                double multiplier = 1.0;
+                if (clickAction.contains("buy")) {
+                    multiplier = plugin.getConfig().getDouble("economy.buy-multiplier", 1.25);
+                } else if (clickAction.contains("sell")) {
+                    multiplier = plugin.getConfig().getDouble("economy.sell-multiplier", 1.0);
+                }
+
+                double finalPrice = basePrice * multiplier;
+                priceCache.put(player.getUniqueId(), new PriceCacheEntry(finalPrice, clickAction));
             }
         }
     }
 
-    public static Double getAndRemoveCache(UUID uuid) {
+    public static Double getAndRemoveCache(UUID uuid, String requiredAction) {
         PriceCacheEntry entry = priceCache.remove(uuid);
-        return (entry != null && !entry.isExpired()) ? entry.price : null;
+        if (entry != null && !entry.isExpired()) {
+            // 校验操作类型
+            if (entry.tradeType.contains(requiredAction) || requiredAction.contains(entry.tradeType)) {
+                return entry.price;
+            }
+        }
+        return null;
     }
 
-    /**
-     * 生成物品指纹：修正为 public 供 Display 类调用
-     */
+    public static ObjectItem getShopItemByStack(ItemStack stack) {
+        return stack == null ? null : fastLookupMap.get(getItemSignature(stack));
+    }
+
     public static int getItemSignature(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return (item == null) ? 0 : item.getType().hashCode();
         int result = item.getType().hashCode();
@@ -96,8 +108,10 @@ public class ShopInterceptor implements Listener {
         fastLookupMap.clear();
     }
 
-    private record PriceCacheEntry(double price, long timestamp) {
-        PriceCacheEntry(double price) { this(price, System.currentTimeMillis()); }
+    private record PriceCacheEntry(double price, String tradeType, long timestamp) {
+        PriceCacheEntry(double price, String tradeType) { 
+            this(price, tradeType, System.currentTimeMillis()); 
+        }
         boolean isExpired() { return System.currentTimeMillis() - timestamp > CACHE_EXPIRY_MS; }
     }
 }

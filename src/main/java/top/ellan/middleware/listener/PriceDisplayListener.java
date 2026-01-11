@@ -19,16 +19,10 @@ import top.ellan.ecobridge.provider.UShopProvider;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * GUI 实时显示监听器 (配置驱动版)
- * 职责：拦截商店打开事件，根据 config.yml 模板注入动态价格 Lore
- */
 public class PriceDisplayListener implements Listener {
     
     private final EcoBridgeMiddleware plugin;
     private final MiniMessage mm = MiniMessage.miniMessage();
-    
-    // 二级显示缓存：物品特征码 -> {价格, 时间戳}
     private static final Map<Integer, PriceEntry> displayPriceCache = new ConcurrentHashMap<>();
 
     public PriceDisplayListener(EcoBridgeMiddleware plugin) {
@@ -54,14 +48,10 @@ public class PriceDisplayListener implements Listener {
         }
     }
 
-    /**
-     * 获取演算价格（支持从配置文件读取 TTL）
-     */
     private double getOrCalculatePrice(Player player, ObjectItem item, ItemStack stack) {
         int sig = ShopInterceptor.getItemSignature(stack);
         PriceEntry entry = displayPriceCache.get(sig);
         
-        // 从配置读取缓存时长 (秒 -> 毫秒)
         long configTTL = plugin.getConfig().getLong("settings.cache-ttl", 30) * 1000L;
         
         if (entry != null && (System.currentTimeMillis() - entry.timestamp < configTTL)) {
@@ -70,9 +60,19 @@ public class PriceDisplayListener implements Listener {
 
         try {
             DataPacket packet = UShopProvider.getFullDataPacket(player, item, 1);
-            double price = ShopInterceptor.safeCalculatePrice(packet.toJson());
-            displayPriceCache.put(sig, new PriceEntry(price, System.currentTimeMillis()));
-            return price;
+            double basePrice = ShopInterceptor.safeCalculatePrice(packet.toJson());
+            
+            if (basePrice < 0) return -1.0;
+
+            // 显示时根据买卖属性应用倍率，确保 UI 显示与结算一致
+            double multiplier = item.isBuy() ? 
+                plugin.getConfig().getDouble("economy.buy-multiplier", 1.25) : 
+                plugin.getConfig().getDouble("economy.sell-multiplier", 1.0);
+            
+            double finalPrice = basePrice * multiplier;
+
+            displayPriceCache.put(sig, new PriceEntry(finalPrice, System.currentTimeMillis()));
+            return finalPrice;
         } catch (Exception e) {
             return -1.0;
         }
@@ -82,29 +82,21 @@ public class PriceDisplayListener implements Listener {
         displayPriceCache.clear();
     }
 
-    /**
-     * 按照 config.yml 模板注入动态 Lore
-     */
     private void injectDynamicLore(ItemStack item, double price) {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return;
 
-        List<Component> lore = meta.hasLore() ? meta.lore() : new ArrayList<>();
-        if (lore == null) lore = new ArrayList<>();
-
-        // 1. 获取配置中的 Lore 模板和货币名称
         List<String> loreTemplate = plugin.getConfig().getStringList("display.price-lore");
         String currencyName = plugin.getConfig().getString("settings.currency-name", "岚金");
 
-        // 2. 解析模板并注入 Lore
+        List<Component> lore = meta.hasLore() ? meta.lore() : new ArrayList<>();
+        if (lore == null) lore = new ArrayList<>();
+
         for (String line : loreTemplate) {
-            // 如果行内容为空，MiniMessage 渲染为空行组件
             if (line.isEmpty()) {
                 lore.add(Component.empty());
                 continue;
             }
-
-            // 使用 MiniMessage 解析，并绑定价格与货币占位符
             lore.add(mm.deserialize(line, 
                 Placeholder.component("price", Component.text(String.format("%.2f", price))),
                 Placeholder.component("currency", mm.deserialize(currencyName))

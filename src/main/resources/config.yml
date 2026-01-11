@@ -19,6 +19,15 @@ economy:
   hook-name: "EcoBridge-Mid"
   # 当 Rust 核心演算失败或 JSON 异常时的兜底策略
   fallback-to-original: true
+  
+  # --- 买卖倍率核心配置 ---
+  # 购买价格倍率 (基于 Rust 核心演算出的基准市场价)
+  # 计算公式: 最终购买价 = 基准价 * buy-multiplier
+  buy-multiplier: 1.25
+  
+  # 出售价格倍率
+  # 计算公式: 最终出售价 = 基准价 * sell-multiplier
+  sell-multiplier: 1.0
 
 # 界面显示设置 (注入到 UltimateShop 的物品 Lore 中)
 display:

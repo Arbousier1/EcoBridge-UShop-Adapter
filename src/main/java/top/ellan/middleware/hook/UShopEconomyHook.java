@@ -2,18 +2,17 @@ package top.ellan.middleware.hook;
 
 import cn.superiormc.ultimateshop.hooks.economy.AbstractEconomyHook;
 import net.milkbowl.vault.economy.Economy;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import top.ellan.middleware.listener.ShopInterceptor;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.bukkit.Bukkit;
 
 public class UShopEconomyHook extends AbstractEconomyHook {
 
     private static Economy econ = null;
-    // 采用对象锁池，避免 intern() 导致的元空间泄露
     private static final ConcurrentHashMap<UUID, Object> playerLocks = new ConcurrentHashMap<>();
 
     public UShopEconomyHook() {
@@ -38,10 +37,9 @@ public class UShopEconomyHook extends AbstractEconomyHook {
     @Override
     public void takeEconomy(Player player, double value, String currencyID) {
         if (econ == null) return;
-
         synchronized (getLock(player.getUniqueId())) {
-            Double dynamicPrice = ShopInterceptor.getAndRemoveCache(player.getUniqueId());
-            // 如果缓存失效或演算错误，回退至 UltimateShop 的基准价格
+            // 获取锁定后的购买价格（已含溢价）
+            Double dynamicPrice = ShopInterceptor.getAndRemoveCache(player.getUniqueId(), "buy");
             double finalPrice = (dynamicPrice != null && dynamicPrice > 0) ? dynamicPrice : value;
 
             if (econ.getBalance(player) >= finalPrice) {
@@ -55,8 +53,10 @@ public class UShopEconomyHook extends AbstractEconomyHook {
     public void giveEconomy(Player player, double value, String currencyID) {
         if (econ == null) return;
         synchronized (getLock(player.getUniqueId())) {
-            Double dynamicPrice = ShopInterceptor.getAndRemoveCache(player.getUniqueId());
+            // 获取锁定后的出售价格（基准价）
+            Double dynamicPrice = ShopInterceptor.getAndRemoveCache(player.getUniqueId(), "sell");
             double finalReward = (dynamicPrice != null && dynamicPrice > 0) ? dynamicPrice : value;
+            
             econ.depositPlayer(player, finalReward);
             playerLocks.remove(player.getUniqueId());
         }
