@@ -1,4 +1,4 @@
-name: Java CI with Maven (Paper 1.21.1)
+name: Java CI with Gradle (Paper 1.21.1)
 
 # 定义触发条件
 on:
@@ -12,21 +12,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+<<<<<<< HEAD
     # 1. 拉取代码并开启 LFS 支持
     # 必须开启 lfs: true，否则下载到的 JAR 包仅为 1KB 的指针文件，会导致编译失败
+=======
+    # 1. 拉取代码并强制开启 LFS
+    # 必须开启 lfs: true，否则 libs 文件夹下的 JAR 包只是文本指针，会导致编译报错
+>>>>>>> bbdda28 (xiufu)
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
         lfs: true
 
+<<<<<<< HEAD
     # 2. 配置 JDK 21 环境
+=======
+    # 2. 配置 Java 21 环境
+>>>>>>> bbdda28 (xiufu)
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         java-version: '21'
-        distribution: 'temurin' 
-        cache: maven
+        distribution: 'temurin'
+        cache: gradle # 开启 Gradle 缓存，加速后续构建
 
+<<<<<<< HEAD
     # 3. 精准安装本地依赖库
     # 使用 find 自动探测嵌套目录中的 JAR
     # 使用 -DgeneratePom=true 强制生成本地 POM，跳过开发者原有的 Parent POM 校验错误
@@ -67,3 +77,22 @@ jobs:
         name: EcoBridgeMiddleware-Release
         path: target/*-protected.jar
         if-no-files-found: error
+=======
+    # 3. 授予 Gradle 执行权限
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    # 4. 执行构建任务
+    # 我们直接运行 proguard 任务，它会自动触发 shadowJar 任务
+    - name: Build and Obfuscate with Gradle
+      run: ./gradlew proguard --no-daemon
+
+    # 5. 上传混淆后的保护包
+    - name: Upload Protected Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: EcoBridgeMiddleware-Gradle-Release
+        # Gradle 默认产物路径在 build/libs/
+        path: build/libs/*-protected.jar
+        if-no-files-found: error
+>>>>>>> bbdda28 (xiufu)
