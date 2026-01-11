@@ -20,17 +20,42 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    # 核心修正：将 libs 里的 JAR 手动安装到本地 Maven 仓库
+    # 新增：调试步骤，列出 libs 目录下的所有文件，确认文件确实存在
+    - name: Debug - List libs directory
+      run: |
+        echo "Checking working directory..."
+        ls -R
+        if [ -d "libs" ]; then
+          echo "Found libs directory. Contents:"
+          ls -l libs/
+        else
+          echo "Error: libs directory NOT FOUND!"
+          exit 1
+        fi
+
+    # 核心修正：安装本地依赖（使用当前目录引用）
     - name: Install Local Dependencies
       run: |
-        mvn install:install-file -Dfile=libs/UltimateShop-4.2.3.jar -DgroupId=cn.superiormc -DartifactId=UltimateShop -Dversion=4.2.3 -Dpackaging=jar
-        mvn install:install-file -Dfile=libs/EcoBridge-1.0.jar -DgroupId=top.ellan.ecobridge -DartifactId=EcoBridge -Dversion=1.0 -Dpackaging=jar
+        mvn install:install-file \
+          -Dfile=./libs/UltimateShop-4.2.3.jar \
+          -DgroupId=cn.superiormc \
+          -DartifactId=UltimateShop \
+          -Dversion=4.2.3 \
+          -Dpackaging=jar
+        
+        mvn install:install-file \
+          -Dfile=./libs/EcoBridge-1.0.jar \
+          -DgroupId=top.ellan.ecobridge \
+          -DartifactId=EcoBridge \
+          -Dversion=1.0 \
+          -Dpackaging=jar
 
     - name: Build with Maven
       run: mvn clean package --file pom.xml
 
-    - name: Upload Artifact
+    - name: Upload Protected Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: EcoBridgeMiddleware-Release
-        path: target/*.jar
+        name: EcoBridgeMiddleware-Final-Release
+        path: target/*-protected.jar
+        if-no-files-found: error
