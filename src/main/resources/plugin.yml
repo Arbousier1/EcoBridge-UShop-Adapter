@@ -1,0 +1,18 @@
+name: EcoBridgeMiddleware
+version: 1.0.0
+main: top.ellan.middleware.EcoBridgeMiddleware
+api-version: '1.20'
+author: Ellan
+description: Middleware connecting EcoBridge and UltimateShop to provide dynamic pricing.
+
+# 必须依赖项：如果缺失其中任何一个，本插件将不会加载
+# UltimateShop: 提供商店框架和交易事件
+# EcoBridge: 提供 Rust 核心计算能力
+# Vault: 提供基础经济服务支持
+depend: 
+  - UltimateShop
+  - EcoBridge
+  - Vault
+
+# 插件加载优先级提示
+load: POSTWORLD

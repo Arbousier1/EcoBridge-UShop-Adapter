@@ -1,0 +1,25 @@
+# ==========================================
+# EcoBridgeMiddleware 现代化配置文件
+# 环境: Paper 1.21.1 | 格式: MiniMessage
+# ==========================================
+
+# 是否开启控制台调试日志 (显示价格修改细节)
+debug: true
+
+# 经济设置
+economy:
+  # 必须与 UShopEconomyHook.java 中的 getName() 返回值严格一致
+  hook-name: "EcoBridge-Mid"
+  # 当 Rust 核心演算失败或 JSON 异常时的兜底策略
+  fallback-to-original: true
+
+# 消息提醒设置 (支持 MiniMessage 标签)
+messages:
+  # 插件前缀
+  prefix: "<dark_gray>[<gradient:#00fbff:#0072ff>EcoBridge-Mid</gradient>] "
+  
+  # 价格变动提示 (已修改为 岚金)
+  price-changed: "<gray>商品动态价格已调整为: <yellow><price> <gold>岚金"
+  
+  # 错误提示
+  calculation-error: "<red>价格演算核心异常，已回退至原价。"
