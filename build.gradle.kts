@@ -17,15 +17,25 @@ group = "top.ellan.middleware"
 version = "1.0.0"
 
 repositories {
+    // 【关键修复】优先查找本地 libs 文件夹
+    // 你的截图显示 libs 文件夹内部是标准的 Maven 结构 (cn/superiormc/...)
+    // 所以必须用 maven 方式引入，而不是 flatDir
+    maven {
+        url = uri("libs")
+    }
+    
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://jitpack.io")
 }
 
 dependencies {
-    // 依赖项
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    // Paper API (远程)
+    compileOnly("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
+    // Vault (远程)
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
+    
+    // 【本地依赖】现在可以通过本地仓库找到了
     compileOnly("cn.superiormc:UltimateShop:4.2.3")
     compileOnly("top.ellan.ecobridge:EcoBridge:1.0")
 }
@@ -49,22 +59,13 @@ tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
 }
 
-// 2. 注意：这里删除了 import 语句，改在下方直接使用全名
-// 3. 注册混淆任务
+// 注册混淆任务
 tasks.register<proguard.gradle.ProGuardTask>("proguard") {
-    // 确保在 jar 任务之后运行
     dependsOn("jar")
-
-    // 读取混淆配置
     configuration("src/main/resources/proguard.pro")
-
-    // 输入：读取 jar 任务的产物
     injars(tasks.named("jar"))
-
-    // 输出：生成 -protected.jar
     outjars(layout.buildDirectory.file("libs/${project.name}-${project.version}-protected.jar"))
 
-    // Java 21 运行环境支持
     libraryjars(
         mapOf("jarfilter" to "!**.jar", "filter" to "!module-info.class"),
         fileTree("${System.getProperty("java.home")}/jmods") {
@@ -72,8 +73,6 @@ tasks.register<proguard.gradle.ProGuardTask>("proguard") {
         }
     )
 
-    // 添加编译依赖
     libraryjars(configurations.compileClasspath.get())
-
     verbose()
 }
