@@ -2,6 +2,8 @@ package top.ellan.ecobridge.adapter.ushop.util;
 
 import cn.superiormc.ultimateshop.UltimateShop;
 import cn.superiormc.ultimateshop.objects.buttons.ObjectItem;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import top.ellan.ecobridge.adapter.ushop.EcoBridgeUShopAdapter;
@@ -15,14 +17,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * 价格预热管理器 (同步加固版)
- * 职责：
- * 1. 异步分批从 Rust 核心获取行情。
- * 2. 同步注入 UltimateShop 内存并重载对象。
- * 3. 具备错误重试与统计功能。
+ * 价格预热管理器 (MiniMessage 优化版)
  */
 public class WarmupManager {
     
+    private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final int BATCH_SIZE = 5;
     private static final long BATCH_DELAY_TICKS = 2L;
 
@@ -41,19 +40,27 @@ public class WarmupManager {
         totalFail.set(0);
 
         Bukkit.getScheduler().runTaskLaterAsynchronously(adapter, () -> {
-            adapter.getLogger().info("§b[行情预热] 任务启动：正在从数据库恢复全球市场行情...");
+            Bukkit.getConsoleSender().sendMessage(MM.deserialize("<aqua>[行情预热] 任务启动：正在从数据库恢复全球市场行情..."));
 
-            List<ObjectItem> allItems = UltimateShop.getInstance().getShopManager()
-                    .getShops().values().stream()
-                    .flatMap(shop -> shop.getItems().values().stream())
-                    .collect(Collectors.toList());
+            try {
+                // 【修复】使用 getPlugin 替换 getInstance
+                List<ObjectItem> allItems = UltimateShop.getPlugin(UltimateShop.class).getShopManager()
+                        .getShops().values().stream()
+                        .flatMap(shop -> shop.getItems().values().stream())
+                        .collect(Collectors.toList());
 
-            if (allItems.isEmpty()) {
-                adapter.getLogger().info("§7[行情预热] 未找到任何物品，跳过。");
-                return;
+                if (allItems.isEmpty()) {
+                    Bukkit.getConsoleSender().sendMessage(MM.deserialize("<gray>[行情预热] 未找到任何物品，跳过。"));
+                    return;
+                }
+
+                processBatch(allItems, 0);
+            } catch (Exception e) {
+                Bukkit.getConsoleSender().sendMessage(MM.deserialize(
+                        "<red>[行情预热] 获取商店物品列表失败: <error>",
+                        Placeholder.unparsed("error", e.getMessage())
+                ));
             }
-
-            processBatch(allItems, 0);
         }, delaySeconds * 20L);
     }
 
@@ -76,8 +83,11 @@ public class WarmupManager {
         } else {
             // 延迟打印总结，等待最后的注入任务完成
             Bukkit.getScheduler().runTaskLater(adapter, () -> {
-                adapter.getLogger().info(String.format("§a[行情预热] 任务已排队完成。目前成功: %d, 失败: %d", 
-                        totalSuccess.get(), totalFail.get()));
+                Bukkit.getConsoleSender().sendMessage(MM.deserialize(
+                        "<green>[行情预热] 任务已排队完成。目前成功: <success>, 失败: <fail>",
+                        Placeholder.unparsed("success", String.valueOf(totalSuccess.get())),
+                        Placeholder.unparsed("fail", String.valueOf(totalFail.get()))
+                ));
             }, 100L);
         }
     }
@@ -104,34 +114,29 @@ public class WarmupManager {
             // 步骤 2: 同步注入 (切换回 Bukkit 主线程)
             Bukkit.getScheduler().runTask(adapter, () -> {
                 try {
-                    // 修改配置镜像
                     updateConfigNode(item, "buy-prices", buyPrice);
                     updateConfigNode(item, "sell-prices", sellPrice);
                     updateConfigNode(item, "prices", buyPrice);
                     
-                    // 重载内存对象 (反射)
                     refreshMemory(item);
 
-                    // 最终校验
                     if (item.getBuyPrice().empty || item.getSellPrice().empty) {
                         throw new IllegalStateException("ObjectPrices 重载后仍标记为空");
                     }
                     
                     totalSuccess.incrementAndGet();
                 } catch (Exception e) {
-                    // 同步注入失败，走重试逻辑
                     handleProcessError(item, e, retryCount, "同步注入");
                 }
             });
 
         } catch (Exception e) {
-            // 异步演算失败，走重试逻辑
             handleProcessError(item, e, retryCount, "价格演算");
         }
     }
 
     /**
-     * 统一异常处理与异步重试调度
+     * 统一异常处理与异步重试调度 (MiniMessage)
      */
     private static void handleProcessError(ObjectItem item, Exception e, int retryCount, String phase) {
         EcoBridgeUShopAdapter adapter = EcoBridgeUShopAdapter.getInstance();
@@ -139,16 +144,24 @@ public class WarmupManager {
         boolean shouldRetry = adapter.getConfig().getBoolean("warmup.retry-failed-items", true);
 
         if (shouldRetry && retryCount < maxRetries) {
-            adapter.getLogger().warning(String.format("§e[预热重试] %s 在 [%s] 失败 (%d/%d): %s", 
-                    item.getProduct(), phase, retryCount + 1, maxRetries, e.getMessage()));
+            Bukkit.getConsoleSender().sendMessage(MM.deserialize(
+                    "<yellow>[预热重试] <id> 在 [<phase>] 失败 (<retry>/<max>): <error>",
+                    Placeholder.unparsed("id", item.getProduct()),
+                    Placeholder.unparsed("phase", phase),
+                    Placeholder.unparsed("retry", String.valueOf(retryCount + 1)),
+                    Placeholder.unparsed("max", String.valueOf(maxRetries)),
+                    Placeholder.unparsed("error", e.getMessage())
+            ));
             
-            // 延迟重试，继续在异步线程运行
             Bukkit.getScheduler().runTaskLaterAsynchronously(adapter, 
                     () -> processItemWithRetry(item, retryCount + 1), 60L);
         } else {
             totalFail.incrementAndGet();
-            adapter.getLogger().severe(String.format("§c[预热失败] %s 最终失败: %s", 
-                    item.getProduct(), e.getMessage()));
+            Bukkit.getConsoleSender().sendMessage(MM.deserialize(
+                    "<red>[预热失败] <id> 最终失败: <error>",
+                    Placeholder.unparsed("id", item.getProduct()),
+                    Placeholder.unparsed("error", e.getMessage())
+            ));
             
             if (adapter.getConfig().getBoolean("settings.debug-log", true)) {
                 e.printStackTrace();

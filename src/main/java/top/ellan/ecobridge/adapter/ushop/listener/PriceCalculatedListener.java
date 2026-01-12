@@ -2,6 +2,8 @@ package top.ellan.ecobridge.adapter.ushop.listener;
 
 import cn.superiormc.ultimateshop.UltimateShop;
 import cn.superiormc.ultimateshop.objects.buttons.ObjectItem;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.event.EventHandler;
@@ -13,9 +15,11 @@ import top.ellan.ecobridge.api.event.PriceCalculatedEvent;
 import java.lang.reflect.Method;
 
 /**
- * 价格演算结果监听器 (同步优化版)
+ * 价格演算结果监听器 (MiniMessage 优化版)
  */
 public class PriceCalculatedListener implements Listener {
+
+    private static final MiniMessage MM = MiniMessage.miniMessage();
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPriceCalculated(PriceCalculatedEvent event) {
@@ -23,47 +27,51 @@ public class PriceCalculatedListener implements Listener {
         String productId = event.getProductId();
         double basePrice = event.getNewPrice(); 
 
-        // 1. 异步阶段：计算价格（该操作不涉及物品对象，安全）
+        // 1. 异步阶段：演算逻辑
         double multiplier = EcoBridgeUShopAdapter.getInstance()
                 .getConfig().getDouble("settings.buy-multiplier", 1.25);
         
         double sellPrice = Math.round(basePrice * 100.0) / 100.0;
         double buyPrice = Math.round(basePrice * multiplier * 100.0) / 100.0;
 
-        // 2. 同步阶段：回归主线程进行数据注入
-        // UltimateShop 的 ObjectItem 及其内部配置对象在主线程操作最为安全
+        // 2. 同步阶段：注入数据
         Bukkit.getScheduler().runTask(EcoBridgeUShopAdapter.getInstance(), () -> {
-            ObjectItem item = UltimateShop.getInstance().getShopManager()
-                    .getShop(shopId)
-                    .getItem(productId);
-
-            if (item == null) return;
-
             try {
-                // 更新内存中的配置节点
+                ObjectItem item = UltimateShop.getPlugin(UltimateShop.class).getShopManager()
+                        .getShop(shopId)
+                        .getItem(productId);
+
+                if (item == null) return;
+
                 updateConfigNode(item, "buy-prices", buyPrice);
                 updateConfigNode(item, "sell-prices", sellPrice);
                 updateConfigNode(item, "prices", buyPrice);
 
-                // 反射强制重载价格对象
                 refreshMemory(item);
 
-                // 自检逻辑
                 if (item.getBuyPrice().empty || item.getSellPrice().empty) {
-                    throw new IllegalStateException("价格注入成功但 ObjectPrices 状态为空");
+                    throw new IllegalStateException("价格注入成功但 ObjectPrices 状态为空 (.empty)");
                 }
 
-                // 调试日志
+                // 3. 调试日志 (使用 MiniMessage)
                 if (EcoBridgeUShopAdapter.getInstance().getConfig().getBoolean("settings.debug-log", true)) {
-                    EcoBridgeUShopAdapter.getInstance().getLogger().info(String.format(
-                        "§b[行情波动] §f%s §8| §a出售: %.2f §8| §c买入: %.2f (%.2fx)",
-                        productId, sellPrice, buyPrice, multiplier
+                    // 使用占位符系统防止 String.format 的繁琐
+                    String logMsg = "<aqua>[行情波动] <white><id> <dark_gray>| <green>出售: <sell> <dark_gray>| <red>买入: <buy> <dark_gray>(<mul>x)";
+                    
+                    Bukkit.getConsoleSender().sendMessage(MM.deserialize(logMsg,
+                            Placeholder.unparsed("id", productId),
+                            Placeholder.unparsed("sell", String.format("%.2f", sellPrice)),
+                            Placeholder.unparsed("buy", String.format("%.2f", buyPrice)),
+                            Placeholder.unparsed("mul", String.format("%.2f", multiplier))
                     ));
                 }
             } catch (Exception e) {
-                EcoBridgeUShopAdapter.getInstance().getLogger().severe(
-                    "§c[内核警报] 无法接管物品 " + productId + " : " + e.getMessage()
-                );
+                // 错误日志也转为 MiniMessage
+                Bukkit.getConsoleSender().sendMessage(MM.deserialize(
+                        "<red>[内核警报] 无法接管物品 <id> : <error>",
+                        Placeholder.unparsed("id", productId),
+                        Placeholder.unparsed("error", e.getMessage())
+                ));
             }
         });
     }
@@ -86,7 +94,7 @@ public class PriceCalculatedListener implements Listener {
             initBuy.invoke(item);
             initSell.invoke(item);
         } catch (NoSuchMethodException e) {
-            throw new Exception("UltimateShop 版本不兼容：缺失初始化方法。");
+            throw new Exception("UltimateShop 版本不兼容：未找到所需的私有初始化方法。");
         }
     }
 }

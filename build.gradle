@@ -17,35 +17,30 @@ java {
 repositories {
     mavenCentral()
     maven { url = uri('https://jitpack.io') }
-    // 如果你有自己的私服仓库可以加在这里
 }
 
 dependencies {
-    // Paper 核心依赖 (用于开发和混淆重映射)
-    paperweight.paperDevBundle('1.21.1-R0.1-SNAPSHOT')
+    paperweight.paperDevBundle('1.21.11-R0.1-SNAPSHOT')
 
-    // Vault API (经济系统基础)
+    // Vault API
     compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
         exclude group: 'org.bukkit'
         exclude group: 'org.spigotmc'
     }
 
-    // 关键核心依赖：请确保项目根目录下有名为 libs 的文件夹
-    // 并且里面存放了 EcoBridge.jar 和 UltimateShop.jar
+    // 本地依赖：EcoBridge.jar, UltimateShop.jar
     compileOnly fileTree(dir: 'libs', include: '**/*.jar')
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    // 强制使用 Java 21 特性编译
     options.release.set(21)
 }
 
 processResources {
-    // 定义要注入 plugin.yml 的属性
     def props = [
         version: version,
-        apiVersion: "1.21.11" // 对应你要求的特殊 api-version
+        apiVersion: "1.21.11" // 满足你要求的特殊 api-version 注入
     ]
     inputs.properties props
     filteringCharset = 'UTF-8'
@@ -54,25 +49,31 @@ processResources {
     }
 }
 
-// ShadowJar 配置：用于混淆打包
+// ShadowJar 配置
 shadowJar {
-    // 保持输出文件名简洁，不带 -all 后缀
-    archiveClassifier = ''
+    archiveClassifier.set('') // 输出文件名不带 -all
     
-    // 如果你有需要打包进去的第三方库（不包含 compileOnly 的），在这里配置 relocate
-    // relocate 'com.example.library', 'top.ellan.ecobridge.adapter.ushop.libs'
+    // 如果将来引入了其他需要打包进去的库（如自定义算法库），取消下面注释
+    // relocate 'com.example.lib', 'top.ellan.ecobridge.adapter.ushop.libs'
 }
 
-// 确保在执行 build 时先进行 shadow 打包再进行 reobf (Paperweight 混淆重映射)
+// 【关键修改】确保 Paperweight 重映射的是 ShadowJar 的产物
+// 这样你发给玩家的 Jar 才是既包含了依赖（如果有）又是经过混淆重映射的
+tasks.reobfJar {
+    outputJar.set(layout.buildDirectory.file("libs/${project.name}-${project.version}.jar"))
+}
+
+// 让 build 任务自动执行 shadowJar 和 reobfJar
 tasks.assemble {
-    dependsOn(shadowJar)
+    dependsOn(reobfJar)
 }
 
-// [关键修复]
-// 使用 matching + configureEach 实现“懒配置”
-// 1. 不需要 import 类，避免编译脚本时的 ClassNotFound
-// 2. 只有当任务真实存在时才配置，避免 TaskNotFound
-// 3. 限制内存为 2GB，防止 GitHub Actions/Codespaces 等环境 OOM 崩溃
+// 【关键修复】懒配置
 tasks.matching { it.name == 'decompileMinecraftServerJar' }.configureEach {
     jvmArgs.set(["-Xmx2G"])
+}
+
+// 配置 runPaper 任务方便本地调试
+tasks.runServer {
+    minecraftVersion("1.21.11")
 }
