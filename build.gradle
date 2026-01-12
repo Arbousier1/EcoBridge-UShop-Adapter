@@ -50,8 +50,10 @@ shadowJar {
 }
 
 // [关键修复]
-// 不再使用 import，而是通过任务名称直接配置
-// 限制 Paperweight 反编译任务的内存占用，防止 Codespaces (4G内存) 崩溃
-tasks.named("decompileMinecraftServerJar") {
+// 使用 matching + configureEach 实现“懒配置”
+// 1. 不需要 import 类，避免 ClassNotFound
+// 2. 只有当任务真实存在时才配置，避免 TaskNotFound
+// 3. 限制内存为 2GB，防止 GitHub Actions/Codespaces 崩溃
+tasks.matching { it.name == 'decompileMinecraftServerJar' }.configureEach {
     jvmArgs.set(["-Xmx2G"])
 }
