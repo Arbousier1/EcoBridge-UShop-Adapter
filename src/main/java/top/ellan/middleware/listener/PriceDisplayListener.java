@@ -12,11 +12,13 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import top.ellan.middleware.EcoBridgeMiddleware;
 import top.ellan.ecobridge.bridge.DataPacket;
 import top.ellan.ecobridge.provider.UShopProvider;
+import top.ellan.middleware.EcoBridgeMiddleware;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PriceDisplayListener implements Listener {
@@ -59,12 +61,13 @@ public class PriceDisplayListener implements Listener {
         }
 
         try {
-            DataPacket packet = UShopProvider.getFullDataPacket(player, item, 1);
-            double basePrice = ShopInterceptor.safeCalculatePrice(packet.toJson());
+            // 获取物品实际堆叠数量，确保显示价格正确
+            int amount = stack.getAmount();
+            DataPacket packet = UShopProvider.getFullDataPacket(player, item, amount);
             
+            double basePrice = ShopInterceptor.safeCalculatePrice(packet.toJson());
             if (basePrice < 0) return -1.0;
 
-            // 显示时根据买卖属性应用倍率，确保 UI 显示与结算一致
             double multiplier = item.isBuy() ? 
                 plugin.getConfig().getDouble("economy.buy-multiplier", 1.25) : 
                 plugin.getConfig().getDouble("economy.sell-multiplier", 1.0);
@@ -81,6 +84,11 @@ public class PriceDisplayListener implements Listener {
     public static void clearTemplateCache() {
         displayPriceCache.clear();
     }
+    
+    public static void cleanExpiredCache() {
+        long now = System.currentTimeMillis();
+        displayPriceCache.entrySet().removeIf(e -> now - e.getValue().timestamp > 30000); 
+    }
 
     private void injectDynamicLore(ItemStack item, double price) {
         ItemMeta meta = item.getItemMeta();
@@ -91,6 +99,9 @@ public class PriceDisplayListener implements Listener {
 
         List<Component> lore = meta.hasLore() ? meta.lore() : new ArrayList<>();
         if (lore == null) lore = new ArrayList<>();
+
+        // 简单去重：防止Lore无限堆叠 (实际环境建议检查特定NBT标签)
+        if (lore.size() > 20) return; 
 
         for (String line : loreTemplate) {
             if (line.isEmpty()) {

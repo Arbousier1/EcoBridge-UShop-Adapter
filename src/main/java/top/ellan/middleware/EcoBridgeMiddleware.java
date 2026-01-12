@@ -8,6 +8,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import top.ellan.middleware.hook.UShopEconomyHook;
+import top.ellan.middleware.listener.PlayerQuitListener;
 import top.ellan.middleware.listener.PriceDisplayListener;
 import top.ellan.middleware.listener.ShopInterceptor;
 
@@ -17,10 +18,9 @@ public final class EcoBridgeMiddleware extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        // 0. 初始化配置文件
         saveDefaultConfig();
 
-        // 1. 验证依赖项
+        // 1. 依赖检查
         if (!validateDependencies()) {
             sendRichLog("<red>[!] 核心依赖缺失 (UltimateShop/EcoBridge/Vault)，插件已禁用！");
             getServer().getPluginManager().disablePlugin(this);
@@ -28,20 +28,28 @@ public final class EcoBridgeMiddleware extends JavaPlugin {
         }
 
         try {
-            // 2. 初始化模块
+            // 2. 初始化拦截器静态引用
             ShopInterceptor.init(this);
 
-            // 延迟构建索引，确保 UltimateShop 配置就绪
-            Bukkit.getScheduler().runTaskLater(this, ShopInterceptor::buildIndex, 1L);
+            // 3. 同步构建索引 (防止玩家在插件刚启动时打开商店报错)
+            ShopInterceptor.buildIndex();
             
-            // 3. 注册经济钩子
+            // 4. 注册 UltimateShop 经济钩子
+            // 这将接管 UShop 的 checkEconomy 和 takeEconomy/giveEconomy
             UltimateShop.getInstance().getHookManager()
                 .registerNewEconomyHook("EcoBridge-Mid", new UShopEconomyHook());
             
-            // 4. 注册事件
+            // 5. 注册事件监听器
             var pluginManager = getServer().getPluginManager();
             pluginManager.registerEvents(new ShopInterceptor(), this);
             pluginManager.registerEvents(new PriceDisplayListener(this), this);
+            pluginManager.registerEvents(new PlayerQuitListener(), this); // 新增：防止内存泄漏
+
+            // 6. 启动异步清理任务 (每分钟清理一次过期缓存)
+            Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+                PriceDisplayListener.cleanExpiredCache();
+                ShopInterceptor.cleanExpiredCache();
+            }, 1200L, 1200L);
             
             logStartup();
         } catch (Exception e) {
@@ -53,9 +61,11 @@ public final class EcoBridgeMiddleware extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // 清理所有静态缓存和锁
         ShopInterceptor.clearAllCaches(); 
         PriceDisplayListener.clearTemplateCache();
-        sendRichLog("<gold>EcoBridgeMiddleware 已安全关闭，所有缓存已释放。");
+        UShopEconomyHook.clearAllLocks();
+        sendRichLog("<gold>EcoBridgeMiddleware 已安全关闭。");
     }
 
     @Override
@@ -87,8 +97,8 @@ public final class EcoBridgeMiddleware extends JavaPlugin {
 
     private void logStartup() {
         sendRichLog("<gradient:#00fbff:#0072ff>========================================</gradient>");
-        sendRichLog("  <bold><white>EcoBridgeMiddleware</white></bold> <gray>v1.0.0</gray>");
-        sendRichLog("  <green>状态:</green> <white>接管成功 [1.25x 买卖差价对齐模式]</white>");
+        sendRichLog("  <bold><white>EcoBridgeMiddleware</white></bold> <gray>v1.0.2-RELEASE</gray>");
+        sendRichLog("  <green>状态:</green> <white>双向交易拦截系统已就绪</white>");
         sendRichLog("<gradient:#00fbff:#0072ff>========================================</gradient>");
     }
 }
