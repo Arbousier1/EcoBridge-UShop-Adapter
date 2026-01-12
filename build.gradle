@@ -1,8 +1,8 @@
 plugins {
     id 'java-library'
-    id 'io.papermc.paperweight.userdev' version '1.7.1'
-    id 'xyz.jpenilla.run-paper' version '2.3.0'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.19'
+    id 'xyz.jpenilla.run-paper' version '3.0.2'
+    id 'com.gradleup.shadow' version '9.3.1'
 }
 
 group = 'top.ellan'
@@ -22,13 +22,11 @@ repositories {
 dependencies {
     paperweight.paperDevBundle('1.21.11-R0.1-SNAPSHOT')
 
-    // Vault API
     compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
         exclude group: 'org.bukkit'
         exclude group: 'org.spigotmc'
     }
 
-    // 本地依赖：EcoBridge.jar, UltimateShop.jar
     compileOnly fileTree(dir: 'libs', include: '**/*.jar')
 }
 
@@ -40,7 +38,7 @@ tasks.withType(JavaCompile).configureEach {
 processResources {
     def props = [
         version: version,
-        apiVersion: "1.21.11" // 满足你要求的特殊 api-version 注入
+        apiVersion: "1.21.11" // 满足你要求的 plugin.yml 内部版本号
     ]
     inputs.properties props
     filteringCharset = 'UTF-8'
@@ -49,31 +47,19 @@ processResources {
     }
 }
 
-// ShadowJar 配置
 shadowJar {
-    archiveClassifier.set('') // 输出文件名不带 -all
-    
-    // 如果将来引入了其他需要打包进去的库（如自定义算法库），取消下面注释
-    // relocate 'com.example.lib', 'top.ellan.ecobridge.adapter.ushop.libs'
+    archiveClassifier.set('') 
 }
 
-// 【关键修改】确保 Paperweight 重映射的是 ShadowJar 的产物
-// 这样你发给玩家的 Jar 才是既包含了依赖（如果有）又是经过混淆重映射的
+// 确保 Paperweight 重新混淆的是 ShadowJar 的产物
 tasks.reobfJar {
     outputJar.set(layout.buildDirectory.file("libs/${project.name}-${project.version}.jar"))
 }
 
-// 让 build 任务自动执行 shadowJar 和 reobfJar
 tasks.assemble {
     dependsOn(reobfJar)
 }
 
-// 【关键修复】懒配置
 tasks.matching { it.name == 'decompileMinecraftServerJar' }.configureEach {
     jvmArgs.set(["-Xmx2G"])
-}
-
-// 配置 runPaper 任务方便本地调试
-tasks.runServer {
-    minecraftVersion("1.21.11")
 }
