@@ -47,13 +47,29 @@ processResources {
     }
 }
 
+// 1. 配置 shadowJar，通常我们不希望它带 "-all" 后缀
 shadowJar {
-    archiveClassifier.set('') 
+    archiveClassifier.set('shadow') // 暂时设为 shadow 以便区分，或者设为 ''
 }
 
-// 确保 Paperweight 重新混淆的是 ShadowJar 的产物
+// 2. 关键：重新配置 reobfJar 任务
+// 必须告诉 Paperweight 它的输入来源是 shadowJar 的输出
 tasks.reobfJar {
+    // 建立显式任务依赖
+    dependsOn(tasks.shadowJar)
+    
+    // 显式指定输入文件为 shadowJar 的产物
+    // 这解决了你遇到的 "detect a problem with the following location" 错误
+    inputJar = tasks.shadowJar.archiveFile
+    
+    // 指定输出文件名（如果不指定，默认会带 -reobf 后缀）
+    // 这里将其设为最终的发布包名
     outputJar.set(layout.buildDirectory.file("libs/${project.name}-${project.version}.jar"))
+}
+
+// 3. 确保执行 build 命令时会运行重映射逻辑
+tasks.assemble {
+    dependsOn(tasks.reobfJar)
 }
 
 tasks.assemble {
