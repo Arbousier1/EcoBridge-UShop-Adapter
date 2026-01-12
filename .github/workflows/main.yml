@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取代码并开启 LFS
+    # 1. 拉取代码
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
@@ -25,7 +25,7 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. 安装本地依赖到本地 Maven 仓库
+    # 3. 安装本地依赖 (libs -> mavenLocal)
     - name: Install Local Dependencies
       run: |
         mvn install:install-file \
@@ -44,20 +44,31 @@ jobs:
           -Dpackaging=jar \
           -DgeneratePom=true
 
-    # 4. 关键：动态创建 init.gradle 以强制添加插件仓库
-    # 这可以在不修改项目源码的情况下，告诉 Gradle 去哪里找 ProGuard 插件
+    # 4. 关键修复：使用 beforeSettings 提前注入插件映射
+    # 这会告诉 Gradle："别找 marker 了，直接去下 jar 包！"
     - name: Setup Gradle Init Script
+      shell: bash
       run: |
-        echo "settingsEvaluated { settings ->
-          settings.pluginManagement {
-            repositories {
-              gradlePluginPortal()
-              mavenCentral()
+        cat <<'EOF' > init.gradle
+        beforeSettings { settings ->
+            settings.pluginManagement {
+                repositories {
+                    mavenCentral()
+                    gradlePluginPortal()
+                    mavenLocal()
+                }
+                resolutionStrategy {
+                    eachPlugin {
+                        if (requested.id.id == 'com.guardsquare.proguard') {
+                            useModule("com.guardsquare:proguard-gradle:${requested.version}")
+                        }
+                    }
+                }
             }
-          }
-        }" > init.gradle
+        }
+        EOF
 
-    # 5. 执行构建，通过 --init-script 加载刚才创建的配置
+    # 5. 执行构建
     - name: Build and Obfuscate with Gradle
       run: gradle proguard --init-script init.gradle --no-daemon
 
@@ -68,4 +79,3 @@ jobs:
         name: EcoBridgeMiddleware-Release
         path: build/libs/*-protected.jar
         if-no-files-found: error
-
