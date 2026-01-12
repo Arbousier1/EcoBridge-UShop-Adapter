@@ -11,68 +11,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取代码
+    # 1. 拉取代码 (关键：开启 LFS 以获取 libs/ 目录下的真实 JAR 二进制文件)
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
-        lfs: true
+        lfs: true 
 
-    # 2. 配置 JDK 21
+    # 2. 配置 JDK 21 环境 (使用 Temurin 发行版)
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
-        cache: gradle
 
-    # 3. 安装本地依赖 (libs -> mavenLocal)
-    - name: Install Local Dependencies
-      run: |
-        mvn install:install-file \
-          -Dfile=$(find libs -name "UltimateShop-*.jar") \
-          -DgroupId=cn.superiormc \
-          -DartifactId=UltimateShop \
-          -Dversion=4.2.3 \
-          -Dpackaging=jar \
-          -DgeneratePom=true
-
-        mvn install:install-file \
-          -Dfile=$(find libs -name "EcoBridge-*.jar") \
-          -DgroupId=top.ellan.ecobridge \
-          -DartifactId=EcoBridge \
-          -Dversion=1.0 \
-          -Dpackaging=jar \
-          -DgeneratePom=true
-
-    # 4. 关键修复：使用 beforeSettings 提前注入插件映射
-    # 这会告诉 Gradle："别找 marker 了，直接去下 jar 包！"
-    - name: Setup Gradle Init Script
-      shell: bash
-      run: |
-        cat <<'EOF' > init.gradle
-        beforeSettings { settings ->
-            settings.pluginManagement {
-                repositories {
-                    mavenCentral()
-                    gradlePluginPortal()
-                    mavenLocal()
-                }
-                resolutionStrategy {
-                    eachPlugin {
-                        if (requested.id.id == 'com.guardsquare.proguard') {
-                            useModule("com.guardsquare:proguard-gradle:${requested.version}")
-                        }
-                    }
-                }
-            }
-        }
-        EOF
-
-    # 5. 执行构建
+    # 3. 直接调用系统预装的 Gradle 执行混淆任务
+    # 绕过了本地 gradlew 文件缺失的问题
     - name: Build and Obfuscate with Gradle
-      run: gradle proguard --init-script init.gradle --no-daemon
+      run: gradle proguard --no-daemon
 
-    # 6. 上传产物
+    # 4. 上传构建产物
     - name: Upload Protected Artifact
       uses: actions/upload-artifact@v4
       with:
