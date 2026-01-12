@@ -1,23 +1,45 @@
-plugins {
-    `java`
-    // 引入 Shadow 插件 (通常用于打包依赖，如果不需要可以删掉)
-    id("io.github.goooler.shadow") version "8.1.7" 
-    // 【新增】ProGuard 混淆插件
-    id("com.github.guardsquare.proguard") version "7.4.2"
+// 1. 插件引导配置 (必须放在文件最顶部)
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        // 使用官方 ProGuard Gradle 插件
+        classpath("com.guardsquare:proguard-gradle:7.5.0")
+    }
 }
 
-group = "top.ellan"
+plugins {
+    `java`
+    // 如果您需要 Shade 功能（类似 Maven Shade Plugin），请保留此插件
+    id("io.github.goooler.shadow") version "8.1.7"
+}
+
+group = "top.ellan.middleware"
 version = "1.0.0"
 
 repositories {
     mavenCentral()
+    // Paper API 仓库
     maven("https://repo.papermc.io/repository/maven-public/")
+    // JitPack 仓库 (用于 Vault, UltimateShop, EcoBridge)
+    maven("https://jitpack.io")
 }
 
 dependencies {
-    // 请在这里保留你原有的依赖，例如：
+    // 对应 pom.xml 中的 scope provided -> Gradle 使用 compileOnly
+    
+    // Paper API
     compileOnly("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
-    // implementation(libs.ultimateshop) // 如果你用了 version catalog
+    
+    // Vault
+    compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
+    
+    // UltimateShop (jitpack)
+    compileOnly("cn.superiormc:UltimateShop:4.2.3")
+    
+    // EcoBridge (注意版本已对齐为 1.0)
+    compileOnly("top.ellan.ecobridge:EcoBridge:1.0")
 }
 
 java {
@@ -26,29 +48,40 @@ java {
     }
 }
 
-// 设置编码
+// 资源文件处理 (替换 plugin.yml 中的变量)
+tasks.processResources {
+    val props = mapOf("version" to version)
+    inputs.properties(props)
+    filteringCharset = "UTF-8"
+    filesMatching("plugin.yml") {
+        expand(props)
+    }
+}
+
+// 编译选项
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
 }
 
-// 【新增】配置 ProGuard 混淆任务
+// 2. 引入 ProGuard 任务类
 import proguard.gradle.ProGuardTask
 
+// 3. 注册混淆任务
 tasks.register<ProGuardTask>("proguard") {
-    // 确保在 jar 任务之后运行
+    // 确保在构建 jar 之后运行
     dependsOn("jar")
 
-    // 1. 读取混淆配置文件 (位于 src/main/resources/proguard.pro)
+    // 1. 读取混淆配置文件
+    // ⚠️ 请确保您将复杂的规则（如 ShopInterceptor 的保护）写入此文件
     configuration("src/main/resources/proguard.pro")
 
-    // 2. 设置输入 Jar (读取标准 jar 任务的产物)
-    // 如果你使用了 shadowJar 打包依赖，请将下面这行改为: injars(tasks.named("shadowJar"))
+    // 2. 输入：读取 jar 任务的产物
     injars(tasks.named("jar"))
 
-    // 3. 设置输出 Jar (在 build/libs/ 下生成 -protected.jar)
+    // 3. 输出：生成 -protected.jar
     outjars(layout.buildDirectory.file("libs/${project.name}-${project.version}-protected.jar"))
 
-    // 4. 【关键】添加 Java 21 运行环境 (Java 9+ 使用 jmods 而非 rt.jar)
+    // 4. Java 21 运行环境支持 (修复 jmods 路径问题)
     libraryjars(
         mapOf("jarfilter" to "!**.jar", "filter" to "!module-info.class"),
         fileTree("${System.getProperty("java.home")}/jmods") {
@@ -56,9 +89,9 @@ tasks.register<ProGuardTask>("proguard") {
         }
     )
 
-    // 5. 添加编译时的依赖库 (防止 ProGuard 误删引用的 Paper/Bukkit 类)
+    // 5. 添加编译时的依赖库 (防止 ProGuard 误删 Paper/Bukkit/EcoBridge API)
     libraryjars(configurations.compileClasspath.get())
 
-    // 打印详细日志，方便 CI 排查
+    // 开启详细日志
     verbose()
 }
