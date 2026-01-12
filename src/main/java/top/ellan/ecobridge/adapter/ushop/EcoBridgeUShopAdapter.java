@@ -3,15 +3,19 @@ package top.ellan.ecobridge.adapter.ushop;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 import top.ellan.ecobridge.adapter.ushop.listener.PriceCalculatedListener;
 import top.ellan.ecobridge.adapter.ushop.util.WarmupManager;
 
 /**
- * EcoBridge-UShop 适配器主类 (MiniMessage 优化版)
- * 职责：管理插件生命周期、验证依赖关系、启动异步预热任务。
+ * EcoBridge-UShop 适配器主类
+ * 职责：管理插件生命周期、验证依赖关系、启动异步预热任务及指令重载。
  */
-public class EcoBridgeUShopAdapter extends JavaPlugin {
+public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor {
 
     private static EcoBridgeUShopAdapter instance;
     private static final MiniMessage MM = MiniMessage.miniMessage();
@@ -20,13 +24,13 @@ public class EcoBridgeUShopAdapter extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // 1. 初始化配置
+        // 1. 初始化配置文件
         saveDefaultConfig();
         
-        // 2. 严格依赖检查 (MiniMessage 格式)
+        // 2. 严格依赖检查
         if (!checkDependencies()) {
             Bukkit.getConsoleSender().sendMessage(MM.deserialize(
-                "<red>[Adapter] 未检测到 EcoBridge 或 UltimateShop，适配器无法运行！"
+                "<red>[Adapter] 核心依赖缺失（EcoBridge 或 UltimateShop），适配器已自动禁用！"
             ));
             Bukkit.getPluginManager().disablePlugin(this);
             return;
@@ -35,17 +39,23 @@ public class EcoBridgeUShopAdapter extends JavaPlugin {
         // 3. 注册事件监听器
         getServer().getPluginManager().registerEvents(new PriceCalculatedListener(), this);
 
-        // 4. 执行异步行情预热
+        // 4. 注册重载指令 (默认为 /ebushop reload)
+        if (getCommand("ebushop") != null) {
+            getCommand("ebushop").setExecutor(this);
+        }
+
+        // 5. 启动异步行情预热流程
         WarmupManager.startAsyncWarmup();
 
-        // 5. 打印启动 Logo
+        // 6. 打印炫酷的启动 Logo
         printLogo();
     }
 
     @Override
     public void onDisable() {
+        // 防止内存泄漏
         instance = null;
-        Bukkit.getConsoleSender().sendMessage(MM.deserialize("<gray>[Adapter] 适配器已卸载。"));
+        Bukkit.getConsoleSender().sendMessage(MM.deserialize("<gray>[Adapter] 适配器已安全卸载。"));
     }
 
     /**
@@ -64,7 +74,7 @@ public class EcoBridgeUShopAdapter extends JavaPlugin {
     }
 
     /**
-     * 优雅的控制台 Logo (使用 MiniMessage 标签)
+     * 优雅的控制台 Logo (MiniMessage 实现)
      */
     private void printLogo() {
         double multiplier = getConfig().getDouble("settings.buy-multiplier", 1.25);
@@ -82,15 +92,33 @@ public class EcoBridgeUShopAdapter extends JavaPlugin {
         ));
         Bukkit.getConsoleSender().sendMessage(MM.deserialize("<blue>┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"));
     }
+
+    /**
+     * 指令执行器：处理重载指令
+     */
+    @Override
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission("ecobridge.admin")) {
+                sender.sendMessage(MM.deserialize("<red>你没有权限执行此操作。"));
+                return true;
+            }
+            reloadAdapter();
+            sender.sendMessage(MM.deserialize("<green>[Adapter] 配置重载成功！"));
+            return true;
+        }
+        return false;
+    }
     
     /**
-     * 配置重载支持
+     * 配置重载逻辑
      */
     public void reloadAdapter() {
         reloadConfig();
+        double newMul = getConfig().getDouble("settings.buy-multiplier", 1.25);
         Bukkit.getConsoleSender().sendMessage(MM.deserialize(
-            "<green>[Adapter] 配置已重新加载，新倍率: <yellow><mul>",
-            Placeholder.unparsed("mul", String.valueOf(getConfig().getDouble("settings.buy-multiplier")))
+            "<green>[Adapter] 配置文件已重载。新倍率: <yellow><mul>x",
+            Placeholder.unparsed("mul", String.valueOf(newMul))
         ));
     }
 }
