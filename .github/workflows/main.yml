@@ -11,28 +11,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取代码 (关键：开启 LFS 以获取 libs/ 目录下的真实 JAR 二进制文件)
+    # 1. 拉取代码并开启 LFS (防止 libs 下的 jar 包失效)
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
-        lfs: true 
+        lfs: true
 
-    # 2. 配置 JDK 21 环境 (使用 Temurin 发行版)
+    # 2. 配置 Java 21 环境
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
+        cache: gradle
 
-    # 3. 直接调用系统预装的 Gradle 执行混淆任务
-    # 绕过了本地 gradlew 文件缺失的问题
-    - name: Build and Obfuscate with Gradle
-      run: gradle proguard --no-daemon
+    # 3. 授予执行权限
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
 
-    # 4. 上传构建产物
-    - name: Upload Protected Artifact
+    # 4. 执行构建任务
+    # 注意：如果你的 build.gradle.kts 里没有显式定义名为 'proguard' 的 task，
+    # 请确认你的混淆任务名。通常 build 任务会包含这些，或者你可以尝试执行 assemble
+    - name: Build with Gradle
+      run: ./gradlew build --no-daemon
+
+    # 5. 上传产物
+    # Gradle 的产物通常在 build/libs 目录下
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: EcoBridgeMiddleware-Release
-        path: build/libs/*-protected.jar
+        path: build/libs/*.jar
         if-no-files-found: error
