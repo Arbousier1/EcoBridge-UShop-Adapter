@@ -1,5 +1,6 @@
 name: Java CI with Gradle (Paper 1.21.1)
 
+# 定义触发条件
 on:
   push:
     branches: [ "main", "master" ]
@@ -11,13 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取代码并开启 LFS (防止 libs 下的 jar 包失效)
+    # 1. 拉取代码并开启 LFS
+    # 必须开启 lfs: true，防止 libs 下的大文件变成指针
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
         lfs: true
 
-    # 2. 配置 Java 21 环境
+    # 2. 配置 JDK 21 环境
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
@@ -25,21 +27,20 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. 授予执行权限
+    # 3. 授予 Gradle 执行权限
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 4. 执行构建任务
-    # 注意：如果你的 build.gradle.kts 里没有显式定义名为 'proguard' 的 task，
-    # 请确认你的混淆任务名。通常 build 任务会包含这些，或者你可以尝试执行 assemble
-    - name: Build with Gradle
-      run: ./gradlew build --no-daemon
+    # 4. 执行混淆构建任务
+    # 调用我们在 build.gradle.kts 中注册的 'proguard' 任务
+    - name: Build and Obfuscate
+      run: ./gradlew proguard --no-daemon
 
-    # 5. 上传产物
-    # Gradle 的产物通常在 build/libs 目录下
-    - name: Upload Artifact
+    # 5. 上传构建产物
+    # 仅上传生成的 -protected.jar
+    - name: Upload Protected Artifact
       uses: actions/upload-artifact@v4
       with:
         name: EcoBridgeMiddleware-Release
-        path: build/libs/*.jar
+        path: build/libs/*-protected.jar
         if-no-files-found: error
