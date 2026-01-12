@@ -1,4 +1,4 @@
-// 1. buildscript 必须放在第一行
+// 1. buildscript 放在最顶部
 buildscript {
     repositories {
         mavenCentral()
@@ -17,11 +17,15 @@ group = "top.ellan.middleware"
 version = "1.0.0"
 
 repositories {
-    // 【关键修复】优先查找本地 libs 文件夹
-    // 你的截图显示 libs 文件夹内部是标准的 Maven 结构 (cn/superiormc/...)
-    // 所以必须用 maven 方式引入，而不是 flatDir
+    // 【关键修复】本地仓库配置
     maven {
         url = uri("libs")
+        // 告诉 Gradle：如果在本地找不到 .pom 文件，就直接查找 .jar 文件
+        // 这解决了 "Could not find ... .pom" 的报错
+        metadataSources {
+            mavenPom()
+            artifact() 
+        }
     }
     
     mavenCentral()
@@ -30,13 +34,13 @@ repositories {
 }
 
 dependencies {
-    // Paper API (远程)
+    // 远程依赖
     compileOnly("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
-    // Vault (远程)
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
     
-    // 【本地依赖】现在可以通过本地仓库找到了
+    // 本地依赖 (对应 libs/cn/superiormc/UltimateShop/4.2.3/UltimateShop-4.2.3.jar)
     compileOnly("cn.superiormc:UltimateShop:4.2.3")
+    // 本地依赖 (对应 libs/top/ellan/ecobridge/EcoBridge/1.0/EcoBridge-1.0.jar)
     compileOnly("top.ellan.ecobridge:EcoBridge:1.0")
 }
 
@@ -63,9 +67,14 @@ tasks.withType<JavaCompile> {
 tasks.register<proguard.gradle.ProGuardTask>("proguard") {
     dependsOn("jar")
     configuration("src/main/resources/proguard.pro")
+    
+    // 输入
     injars(tasks.named("jar"))
+    
+    // 输出
     outjars(layout.buildDirectory.file("libs/${project.name}-${project.version}-protected.jar"))
 
+    // Java 21 环境支持
     libraryjars(
         mapOf("jarfilter" to "!**.jar", "filter" to "!module-info.class"),
         fileTree("${System.getProperty("java.home")}/jmods") {
@@ -73,6 +82,8 @@ tasks.register<proguard.gradle.ProGuardTask>("proguard") {
         }
     )
 
+    // 编译依赖 (Paper, Vault, UltimateShop 等)
     libraryjars(configurations.compileClasspath.get())
+    
     verbose()
 }
