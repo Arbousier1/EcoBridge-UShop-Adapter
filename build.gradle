@@ -1,0 +1,61 @@
+plugins {
+    id 'java-library'
+    id 'io.papermc.paperweight.userdev' version '1.7.1'
+    id 'xyz.jpenilla.run-paper' version '2.3.0'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'top.ellan'
+version = '1.0.2-RELEASE'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+    // 修复警告1: 使用 = uri(...) 赋值
+    maven { url = uri('https://jitpack.io') }
+}
+
+dependencies {
+    // 修复警告2: 保持原样即可，Paperweight 内部处理稍微特殊，
+    // 但我们可以显式指定依赖以消除潜在歧义
+    paperweight.paperDevBundle('1.21.1-R0.1-SNAPSHOT')
+
+    // Vault API (排除旧版 Bukkit)
+    compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
+        exclude group: 'org.bukkit'
+        exclude group: 'org.spigotmc'
+    }
+
+    // 本地依赖
+    compileOnly fileTree(dir: 'libs', include: '**/*.jar')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
+
+shadowJar {
+    // 修复警告: 使用 = 赋值
+    archiveClassifier = ''
+}
+
+// [关键修复] 限制 Paperweight 反编译任务的内存占用
+// 防止在 Codespaces (4GB 内存) 中崩溃
+tasks.withType(io.papermc.paperweight.tasks.DecompileJar).configureEach {
+    // 默认是 4G，在 Codespaces 里会撑爆内存，调低到 2G
+    jvmArgs.set(["-Xmx2G"])
+}
