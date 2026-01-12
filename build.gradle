@@ -17,27 +17,36 @@ java {
 repositories {
     mavenCentral()
     maven { url = uri('https://jitpack.io') }
+    // 如果你有自己的私服仓库可以加在这里
 }
 
 dependencies {
+    // Paper 核心依赖 (用于开发和混淆重映射)
     paperweight.paperDevBundle('1.21.1-R0.1-SNAPSHOT')
 
-    // Vault API
+    // Vault API (经济系统基础)
     compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
         exclude group: 'org.bukkit'
         exclude group: 'org.spigotmc'
     }
 
-    // 本地依赖
+    // 关键核心依赖：请确保项目根目录下有名为 libs 的文件夹
+    // 并且里面存放了 EcoBridge.jar 和 UltimateShop.jar
     compileOnly fileTree(dir: 'libs', include: '**/*.jar')
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // 强制使用 Java 21 特性编译
+    options.release.set(21)
 }
 
 processResources {
-    def props = [version: version]
+    // 定义要注入 plugin.yml 的属性
+    def props = [
+        version: version,
+        apiVersion: "1.21.11" // 对应你要求的特殊 api-version
+    ]
     inputs.properties props
     filteringCharset = 'UTF-8'
     filesMatching('plugin.yml') {
@@ -45,15 +54,25 @@ processResources {
     }
 }
 
+// ShadowJar 配置：用于混淆打包
 shadowJar {
+    // 保持输出文件名简洁，不带 -all 后缀
     archiveClassifier = ''
+    
+    // 如果你有需要打包进去的第三方库（不包含 compileOnly 的），在这里配置 relocate
+    // relocate 'com.example.library', 'top.ellan.ecobridge.adapter.ushop.libs'
+}
+
+// 确保在执行 build 时先进行 shadow 打包再进行 reobf (Paperweight 混淆重映射)
+tasks.assemble {
+    dependsOn(shadowJar)
 }
 
 // [关键修复]
 // 使用 matching + configureEach 实现“懒配置”
-// 1. 不需要 import 类，避免 ClassNotFound
+// 1. 不需要 import 类，避免编译脚本时的 ClassNotFound
 // 2. 只有当任务真实存在时才配置，避免 TaskNotFound
-// 3. 限制内存为 2GB，防止 GitHub Actions/Codespaces 崩溃
+// 3. 限制内存为 2GB，防止 GitHub Actions/Codespaces 等环境 OOM 崩溃
 tasks.matching { it.name == 'decompileMinecraftServerJar' }.configureEach {
     jvmArgs.set(["-Xmx2G"])
 }

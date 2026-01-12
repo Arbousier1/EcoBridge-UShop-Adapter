@@ -1,66 +1,15 @@
-# =================================================================
-# EcoBridgeMiddleware 核心配置文件
-# 适用环境: Paper 1.21.1+ | 文本格式: MiniMessage (Adventure)
-# =================================================================
+# ============================================================
+# EcoBridge-UShop Adapter Configuration
+# ============================================================
 
-# --- 基础系统设置 ---
 settings:
-  # 是否开启调试模式
-  # 开启后会在控制台输出详细的交易拦截日志和价格计算过程
-  debug: true
-
-  # 货币显示的名称 (支持 MiniMessage 颜色代码)
-  # 例如: <yellow>岚金</yellow> 或 <gradient:gold:yellow>金币</gradient>
-  currency-name: "<yellow>岚金"
-
-  # 动态价格缓存的有效时长 (秒)
-  # 作用: 减少对 Rust 核心的频繁调用。
-  # 警告: 必须与 Rust 核心的更新频率相匹配，建议设置为 30-60 秒。
-  cache-ttl: 30
-
-# --- 经济模型设置 ---
-economy:
-  # 经济钩子名称 (请勿修改，除非你修改了 Java 代码中的构造函数)
-  hook-name: "EcoBridge-Mid"
-
-  # 容错策略: 当 Rust 核心计算失败或返回 -1 时，是否回退到 UltimateShop 的原价？
-  # true: 使用原价交易 (保障交易完成) | false: 阻止交易 (保障经济安全)
-  fallback-to-original: true
-  
-  # --- 买卖倍率配置 ---
-  # 核心逻辑: 最终价格 = Rust基准价 * 倍率
-  # 这允许你在不修改 Rust 算法的情况下，手动调控通胀或回收力度。
-
-  # 购买倍率 (玩家向商店购买)
-  # 默认 1.25 表示玩家购买价格比基准市场价贵 25% (含税/溢价)
+  # 玩家购买价格 = 演算基准价 * 此倍率
+  # 玩家出售价格 = 演算基准价
   buy-multiplier: 1.25
-  
-  # 出售倍率 (玩家卖给商店)
-  # 默认 1.0 表示玩家以基准市场价出售
-  sell-multiplier: 1.0
 
-# --- 界面显示注入 ---
-# 这些内容会被自动注入到 UltimateShop 的 GUI 物品 Lore 中
-display:
-  # 价格 Lore 模板
-  # 可用占位符: 
-  #   <price>    - 计算后的动态价格 (保留两位小数)
-  #   <currency> - 上方配置的 currency-name
-  price-lore: 
-    - ""
-    - "<gray>实时动态价格: <gold><price> <currency>"
-    - "<dark_gray>⚡ 由 EcoBridge 市场推演"
+  # 是否在控制台输出详细的行情变动日志
+  debug-log: true
 
-# --- 消息提示 ---
-messages:
-  # 插件消息前缀
-  prefix: "<dark_gray>[<gradient:#00fbff:#0072ff>EcoBridge</gradient>] "
-  
-  # [交易拦截] 当玩家余额不足以支付动态价格时 (即使显示的静态价格足够)
-  insufficient-balance: "<red>交易被拦截：你的余额不足以支付动态市场价格 (<gold><price><red>)"
-  
-  # [管理员] 重载成功提示
-  reload-success: "<green>配置与商品索引已成功重载！"
-  
-  # [管理员] 权限不足提示
-  no-permission: "<red>你没有权限执行此指令。"
+warmup:
+  # 服务器启动后延迟多少秒开始同步数据库行情
+  delay-seconds: 30

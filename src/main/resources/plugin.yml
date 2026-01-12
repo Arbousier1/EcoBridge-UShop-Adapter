@@ -1,38 +1,20 @@
-name: EcoBridgeMiddleware
-version: '1.0.2-RELEASE'
-main: top.ellan.middleware.EcoBridgeMiddleware
-api-version: '1.21'
-prefix: EcoBridge-Mid
-authors: [Ellan]
-description: "基于 Rust 核心演算的 UltimateShop 动态经济中间件"
-website: "https://github.com/YourRepo"
+name: EcoBridgeUShopAdapter
+version: 1.0.0
+main: top.ellan.ecobridge.adapter.ushop.EcoBridgeUShopAdapter
+# 按照您的要求，保持 1.21.11 版本定义
+api-version: 1.21.11
+author: Ellan
+description: 应用 1.25x 买卖差价并对接 UltimateShop 的官方适配器。
 
-# 加载顺序：POSTWORLD 
-# 确保在所有 World 加载完成、UltimateShop 初始化商店数据后再加载本插件
-# 这样 buildIndex() 才能正确获取到商品列表
-load: POSTWORLD
-
-# 必须依赖列表
-# 缺失任何一个会导致插件无法启动
-depend:
-  - UltimateShop
+# 强制依赖：如果缺少以下插件，本适配器将不会加载
+# 同时保证了加载顺序：EcoBridge/UltimateShop -> EcoBridgeUShopAdapter
+depend: 
   - EcoBridge
-  - Vault
+  - UltimateShop
 
-# 软依赖 (可选)
-softdepend:
-  - PlaceholderAPI
-
-# 指令注册
-commands:
-  ebm:
-    description: "EcoBridgeMiddleware 管理指令"
-    usage: "用法: /ebm reload"
-    permission: ecobridge.admin
-    aliases: [ebmid, ecobridgemid]
-
-# 权限节点
-permissions:
-  ecobridge.admin:
-    description: "允许执行重载指令和查看调试信息"
-    default: op
+# 如果您希望在未来添加手动重载命令，可以取消以下注释
+# commands:
+#   ecobridgeushop:
+#     description: 适配器管理命令
+#     usage: /<command> reload
+#     permission: ecobridge.admin
