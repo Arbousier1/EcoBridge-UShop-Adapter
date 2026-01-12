@@ -6,16 +6,21 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import top.ellan.ecobridge.adapter.ushop.listener.PriceCalculatedListener;
 import top.ellan.ecobridge.adapter.ushop.util.WarmupManager;
 
+import java.util.Collections;
+import java.util.List;
+
 /**
  * EcoBridge-UShop 适配器主类
- * 职责：管理插件生命周期、验证依赖关系、启动异步预热任务及指令重载。
+ * 职责：管理插件生命周期、验证依赖关系、启动异步预热任务及指令处理。
  */
-public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor {
+public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor, TabCompleter {
 
     private static EcoBridgeUShopAdapter instance;
     private static final MiniMessage MM = MiniMessage.miniMessage();
@@ -39,43 +44,34 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
         // 3. 注册事件监听器
         getServer().getPluginManager().registerEvents(new PriceCalculatedListener(), this);
 
-        // 4. 注册重载指令 (默认为 /ebushop reload)
+        // 4. 注册指令与补全器
         if (getCommand("ebushop") != null) {
             getCommand("ebushop").setExecutor(this);
+            getCommand("ebushop").setTabCompleter(this);
         }
 
         // 5. 启动异步行情预热流程
         WarmupManager.startAsyncWarmup();
 
-        // 6. 打印炫酷的启动 Logo
+        // 6. 打印 Logo
         printLogo();
     }
 
     @Override
     public void onDisable() {
-        // 防止内存泄漏
         instance = null;
         Bukkit.getConsoleSender().sendMessage(MM.deserialize("<gray>[Adapter] 适配器已安全卸载。"));
     }
 
-    /**
-     * 检查核心依赖是否存在
-     */
     private boolean checkDependencies() {
         return Bukkit.getPluginManager().isPluginEnabled("EcoBridge") && 
                Bukkit.getPluginManager().isPluginEnabled("UltimateShop");
     }
 
-    /**
-     * 获取插件单例
-     */
     public static EcoBridgeUShopAdapter getInstance() {
         return instance;
     }
 
-    /**
-     * 优雅的控制台 Logo (MiniMessage 实现)
-     */
     private void printLogo() {
         double multiplier = getConfig().getDouble("settings.buy-multiplier", 1.25);
         boolean debug = getConfig().getBoolean("settings.debug-log", true);
@@ -94,25 +90,41 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
     }
 
     /**
-     * 指令执行器：处理重载指令
+     * 指令执行逻辑
      */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+        if (args.length == 0) {
+            sender.sendMessage(MM.deserialize("<aqua>EcoBridge-UShop Adapter <gray>v" + getDescription().getVersion()));
+            sender.sendMessage(MM.deserialize("<gray>使用方式: <white>/ebushop reload"));
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("reload")) {
             if (!sender.hasPermission("ecobridge.admin")) {
                 sender.sendMessage(MM.deserialize("<red>你没有权限执行此操作。"));
                 return true;
             }
             reloadAdapter();
-            sender.sendMessage(MM.deserialize("<green>[Adapter] 配置重载成功！"));
+            sender.sendMessage(MM.deserialize("<green>[Adapter] 配置与倍率重载成功！"));
             return true;
         }
-        return false;
+
+        sender.sendMessage(MM.deserialize("<red>未知子指令。请使用: /ebushop reload"));
+        return true;
+    }
+
+    /**
+     * 指令补全逻辑 (新增)
+     */
+    @Override
+    public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
+        if (args.length == 1 && sender.hasPermission("ecobridge.admin")) {
+            return Collections.singletonList("reload");
+        }
+        return Collections.emptyList();
     }
     
-    /**
-     * 配置重载逻辑
-     */
     public void reloadAdapter() {
         reloadConfig();
         double newMul = getConfig().getDouble("settings.buy-multiplier", 1.25);
