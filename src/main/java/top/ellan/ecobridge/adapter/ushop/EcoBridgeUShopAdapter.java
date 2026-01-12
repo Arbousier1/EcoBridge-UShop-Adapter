@@ -32,7 +32,7 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
         // 1. 初始化配置文件
         saveDefaultConfig();
         
-        // 2. 严格依赖检查
+        // 2. 严格依赖检查 (确保核心和宿主插件都在运行)
         if (!checkDependencies()) {
             Bukkit.getConsoleSender().sendMessage(MM.deserialize(
                 "<red>[Adapter] 核心依赖缺失（EcoBridge 或 UltimateShop），适配器已自动禁用！"
@@ -41,7 +41,7 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
             return;
         }
 
-        // 3. 注册事件监听器
+        // 3. 注册事件监听器 (接收来自 EcoBridge 的价格演算结果)
         getServer().getPluginManager().registerEvents(new PriceCalculatedListener(), this);
 
         // 4. 注册指令与补全器
@@ -50,19 +50,25 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
             getCommand("ebushop").setTabCompleter(this);
         }
 
-        // 5. 启动异步行情预热流程
+        // 5. 启动异步行情预热流程 (服务器启动后根据内核恢复物价)
         WarmupManager.startAsyncWarmup();
 
-        // 6. 打印 Logo
+        // 6. 打印控制台 Logo
         printLogo();
     }
 
     @Override
     public void onDisable() {
+        // 停止所有正在运行的调度任务 (如 Warmup 中的批处理)
+        Bukkit.getScheduler().cancelTasks(this);
+        
         instance = null;
         Bukkit.getConsoleSender().sendMessage(MM.deserialize("<gray>[Adapter] 适配器已安全卸载。"));
     }
 
+    /**
+     * 检查核心依赖是否存在
+     */
     private boolean checkDependencies() {
         return Bukkit.getPluginManager().isPluginEnabled("EcoBridge") && 
                Bukkit.getPluginManager().isPluginEnabled("UltimateShop");
@@ -72,6 +78,9 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
         return instance;
     }
 
+    /**
+     * 优雅的控制台 Logo
+     */
     private void printLogo() {
         double multiplier = getConfig().getDouble("settings.buy-multiplier", 1.25);
         boolean debug = getConfig().getBoolean("settings.debug-log", true);
@@ -90,7 +99,7 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
     }
 
     /**
-     * 指令执行逻辑
+     * 指令执行逻辑：处理重载
      */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
@@ -115,7 +124,7 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
     }
 
     /**
-     * 指令补全逻辑 (新增)
+     * 指令补全逻辑
      */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
@@ -125,12 +134,19 @@ public class EcoBridgeUShopAdapter extends JavaPlugin implements CommandExecutor
         return Collections.emptyList();
     }
     
+    /**
+     * 配置重载逻辑
+     */
     public void reloadAdapter() {
         reloadConfig();
         double newMul = getConfig().getDouble("settings.buy-multiplier", 1.25);
+        
+        // 重新通知控制台
         Bukkit.getConsoleSender().sendMessage(MM.deserialize(
             "<green>[Adapter] 配置文件已重载。新倍率: <yellow><mul>x",
             Placeholder.unparsed("mul", String.valueOf(newMul))
         ));
+        
+        // 如果需要，可以在此处调用 WarmupManager 再次进行增量热更
     }
 }

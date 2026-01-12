@@ -1,7 +1,7 @@
 package top.ellan.ecobridge.adapter.ushop.util;
 
 import cn.superiormc.ultimateshop.managers.ConfigManager;
-import cn.superiormc.ultimateshop.objects.ObjectItem;
+import cn.superiormc.ultimateshop.objects.buttons.ObjectItem; // 【核心修正】修复包路径
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
@@ -15,13 +15,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * 价格预热管理器 (修正 API 版)
+ * 价格预热管理器
+ * 职责：服务器启动时，异步分批从 Rust 内核获取所有商品的初始行情并注入商店。
  */
 public class WarmupManager {
     
     private static final MiniMessage MM = MiniMessage.miniMessage();
-    private static final int BATCH_SIZE = 50;
-    private static final long BATCH_DELAY_TICKS = 1L;
+    private static final int BATCH_SIZE = 50; // 每批处理 50 个物品
+    private static final long BATCH_DELAY_TICKS = 1L; // 批次间延迟 1 tick
 
     private static final AtomicInteger totalSuccess = new AtomicInteger(0);
     private static final AtomicInteger totalFail = new AtomicInteger(0);
@@ -38,11 +39,12 @@ public class WarmupManager {
         totalSuccess.set(0);
         totalFail.set(0);
 
+        // 延迟执行，等待所有商店文件加载完毕
         Bukkit.getScheduler().runTaskLaterAsynchronously(adapter, () -> {
-            Bukkit.getConsoleSender().sendMessage(MM.deserialize("<aqua>[行情预热] 任务启动：恢复全球市场基准行情..."));
+            Bukkit.getConsoleSender().sendMessage(MM.deserialize("<aqua>[行情预热] 任务启动：正在恢复全球市场基准行情..."));
 
             try {
-                // 【核心修正】通过 ConfigManager 扁平化获取所有商品
+                // 扁平化获取所有商店中的所有商品列表
                 List<ObjectItem> allItems = ConfigManager.configManager.getShops().stream()
                         .flatMap(shop -> shop.getProductList().stream())
                         .collect(Collectors.toList());
@@ -62,6 +64,9 @@ public class WarmupManager {
         }, delaySeconds * 20L);
     }
 
+    /**
+     * 递归批处理逻辑，保护服务器性能
+     */
     private static void processBatch(List<ObjectItem> items, int index) {
         EcoBridgeUShopAdapter adapter = EcoBridgeUShopAdapter.getInstance();
         int end = Math.min(index + BATCH_SIZE, items.size());
@@ -72,9 +77,11 @@ public class WarmupManager {
         }
 
         if (end < items.size()) {
+            // 继续下一批次
             Bukkit.getScheduler().runTaskLaterAsynchronously(adapter, 
                 () -> processBatch(items, end), BATCH_DELAY_TICKS);
         } else {
+            // 预热结束报告
             Bukkit.getScheduler().runTaskLater(adapter, () -> {
                 Bukkit.getConsoleSender().sendMessage(MM.deserialize(
                         "<green>[行情预热] 同步完成。成功: <success>, 失败: <fail>",
@@ -85,11 +92,14 @@ public class WarmupManager {
         }
     }
 
+    /**
+     * 单个物品演算与注入
+     */
     private static void processItemWithRetry(ObjectItem item, int retryCount) {
         EcoBridgeUShopAdapter adapter = EcoBridgeUShopAdapter.getInstance();
 
         try {
-            // 已确保 UShopProvider 对 null player 有防御逻辑
+            // 调用数据提供者获取数据包 (player 为 null 触发系统预热模式)
             DataPacket packet = UShopProvider.getFullDataPacket(null, item, 0);
             double basePrice = RustCore.calculatePrice(packet.toJson());
             
@@ -99,6 +109,7 @@ public class WarmupManager {
             double buyPrice = Math.round(basePrice * multiplier * 100.0) / 100.0;
             double sellPrice = Math.round(basePrice * 100.0) / 100.0;
 
+            // 切回主线程注入 UltimateShop 内存
             Bukkit.getScheduler().runTask(adapter, () -> {
                 try {
                     ShopReflector.injectPriceAndFixState(item, buyPrice, sellPrice);
@@ -112,11 +123,14 @@ public class WarmupManager {
         }
     }
 
+    /**
+     * 异常处理与重试机制
+     */
     private static void handleError(ObjectItem item, Exception e, int retry, String phase, boolean allowRetry) {
         EcoBridgeUShopAdapter adapter = EcoBridgeUShopAdapter.getInstance();
         if (allowRetry && retry < 3) {
             Bukkit.getScheduler().runTaskLaterAsynchronously(adapter, 
-                    () -> processItemWithRetry(item, retry + 1), 60L);
+                    () -> processItemWithRetry(item, retry + 1), 60L); // 3秒后重试
         } else {
             totalFail.incrementAndGet();
             if (adapter.getConfig().getBoolean("settings.debug-log", true)) {
